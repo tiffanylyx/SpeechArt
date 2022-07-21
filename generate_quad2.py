@@ -175,7 +175,10 @@ def setText(sentence):
 
     print("pos",base.camera.getPos())
 
-
+#clear the text
+def clearText():
+    entry.enterText('')
+    
 bk_text = "This is my Demo"
 textObject = OnscreenText(text=bk_text, pos=(1.5, -0.95), scale=0.05,
                           fg=(1, 0.5, 0.5, 1), align=TextNode.ACenter,
@@ -184,9 +187,7 @@ textObject = OnscreenText(text=bk_text, pos=(1.5, -0.95), scale=0.05,
 entry = DirectEntry(text = "", scale=.05, command=setText,pos=(1.25, 0,-0.75),
 initialText="Type Something", numLines = 2, focus=1, focusInCommand=clearText)
 
-#clear the text
-def clearText():
-    entry.enterText('')
+
 
 def spinCameraTask(task):
     global angle1, x_old_1,y_old_1,z_old_1
