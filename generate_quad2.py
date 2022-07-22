@@ -169,13 +169,16 @@ def setText(sentence):
         [x1, y1, z1] = solve_point_on_vector(x_old_1, y_old_1, z_old_1, w, i0*sent_vect[0],i1*sent_vect[1], i2*sent_vect[2]) # spread along the sentence vec
 
         angle1 = atan(y1/x1)*180
-
-        if res_parts[count_2][1] == 'VERB':
-            dim = 2
-        else: dim = 3
         [nx, ny, nz] = compute_word_vec(word, model, pca2, pca3, pca4, 3) #word vector 2D or 3D
+        if res_parts[count_2][1] == 'VERB':
+            [x2, y2, z2] = solve_point_on_vector(x1, y1, z1, w, nx, ny, nz)
+            z2 = z_old_2
+            z1 = z_old_1
+            print("group1",x_old_1, y_old_1, z_old_1,"group2", x_old_2, y_old_2, z_old_2, "group3",x1, y1, z1,"group4", x2, y2, z2)
+        else:
+            [x2, y2, z2] = solve_point_on_vector(x1, y1, z1, w, nx, ny, nz)
 
-        [x2, y2, z2] = solve_point_on_vector(x1, y1, z1, w, nx, ny, nz)
+
 
         color_value = compute_word_vec(word, model, pca2, pca3, pca4, 4) #word vector 4D
         '''

@@ -54,6 +54,7 @@ def solve_point_on_vector(x1, y1, z1, distance, vx, vy, vz):
     y2 = Symbol('y2')
     z2 = Symbol('z2')
 
+
     solved_value=solve([(x2-x1)**2+(y2-y1)**2+(z2-z1)**2-distance**2,(x2-x1)/vx-(y2-y1)/vy,(x2-x1)/vx-(z2-z1)/vz], [x2, y2, z2])
 
 
