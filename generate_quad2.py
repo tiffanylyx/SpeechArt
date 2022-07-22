@@ -91,14 +91,14 @@ y_old_1 = -10
 z_old_1 = 0
 
 snode = GeomNode('square')
-'''
+
 alight = AmbientLight('alight')
 alight.setColor((0.9, 0.9, 0.9, 0.4))
 #alight.setShadowCaster(True, 512, 512)
 alnp = render.attachNewNode(alight)
 render.setLight(alnp)
 render.setAntialias(AntialiasAttrib.MAuto)
-'''
+
 
 '''
 plight = PointLight('plight')
@@ -114,7 +114,7 @@ plight.setShadowCaster(True, 512, 512)
 plnp = render.attachNewNode(plight)
 plnp.setPos(10, 0, 0)
 render.setLight(plnp)
-'''
+
 plight = PointLight('plight')
 plight.setColor((0.8, 0.8, 0.8, 1))
 plight.setShadowCaster(True, 512, 512)
@@ -130,7 +130,7 @@ plnp.setPos(0, 0, 10)
 render.setLight(plnp)
 
 render.setShaderAuto()
-
+'''
 angleDegrees = 0
 angleDegreesZ = 0
 angleRadius = 30
@@ -171,10 +171,10 @@ def setText(sentence):
         angle1 = atan(y1/x1)*180
         [nx, ny, nz] = compute_word_vec(word, model, pca2, pca3, pca4, 3) #word vector 2D or 3D
         if res_parts[count_2][1] == 'VERB':
-            [x2, y2, z2] = solve_point_on_vector(x1, y1, z1, w, nx, ny, nz)
-            z2 = z_old_2
-            z1 = z_old_1
-            print("group1",x_old_1, y_old_1, z_old_1,"group2", x_old_2, y_old_2, z_old_2, "group3",x1, y1, z1,"group4", x2, y2, z2)
+            x2 = x1 + x_old_2 - x_old_1
+            #[x2, y2, z2] = solve_point_on_vector(x1, y1, z1, w, nx, ny, nz)
+            y2 = y1 + y_old_2 - y_old_1
+            z2 = z1 + z_old_2 - z_old_1
         else:
             [x2, y2, z2] = solve_point_on_vector(x1, y1, z1, w, nx, ny, nz)
 
