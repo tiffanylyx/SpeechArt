@@ -128,15 +128,7 @@ x_center = 0
 y_center = 0
 z_center = 0
 
-# set camera control
-def spinCameraTask(task):
-    global x_center_r,y_center_r,z_center_
 
-    base.camera.setZ(z_center_r+6)
-    base.camera.lookAt(x_center_r,y_center_r,z_center_r)
-
-    return Task.cont
-base.taskMgr.add(spinCameraTask, "SpinCameraTask")
 
 # helper function to select the point with the lowest y
 def select_lowest_by_y(points):
@@ -148,6 +140,17 @@ def select_lowest_by_y(points):
             y_min = point[1]
         count += 1
     return points[min_index]
+
+# helper function to select the point with the lowest y
+def select_highest_by_y(points):
+    y_max = -10000
+    count = 0
+    for point in points:
+        if point[1]>y_max:
+            max_index = count
+            y_max = point[1]
+        count += 1
+    return points[max_index]
 
 # helper function to select the point with the lowest z
 def select_lowest_by_z(points):
@@ -165,7 +168,22 @@ x_center_r = 0
 y_center_r = 0
 z_center_r = 0
 get_input = True
+#base.disableMouse()
+# set camera control
+def spinCameraTask(task):
+    global x_center_r,y_center_r,z_center_r
+    base.camera.setZ(z_center_r)
+    base.camera.lookAt(x_center_r,y_center_r,z_center_r)
 
+
+    #base.camera.headsUp((x_center_r,y_center_r,z_center_r),(0,0,1))
+    #base.camera.setP(0)
+    #base.camera.setP(0)
+    #base.camera.setR(0)
+    #base.camera.setZ(z_center_r+4)
+
+    return Task.cont
+base.taskMgr.add(spinCameraTask, "SpinCameraTask")
 
 while True:
     if get_input == True:
@@ -187,9 +205,9 @@ while True:
             sentence = sentence[:-1]
 
         # compute the starting coordinate
-        x_old_1 =  x_center_r + i0*time_period
-        y_old_1 = y_center_r + i1*time_period
-        z_old_1 = z_center_r + i2*time_period
+        x_old_1 =  x_center_r + i0*min(6,time_period*0.3)
+        y_old_1 = y_center_r + i1*min(6,time_period*0.3)
+        z_old_1 = z_center_r + i2*min(6,time_period*0.3)
 
         # compute sentence vector
         sent_vect = compute_sent_vec(sentence, model_sentence)
@@ -242,11 +260,20 @@ while True:
         r = vor.vertices
         # delete points that are far away from the center
         for i in r:
-            if (abs(i[0])>1.5*len(word_list)+abs(x_c1))|(abs(i[1])>1.5*len(word_list)+abs(y_c1))|(abs(i[2])>1.5*len(word_list)+abs(z_c1)):
+            if (abs(i[0]-x_c1)>len(word_list))|(abs(i[1]-y_c1)>len(word_list))|(abs(i[2]-z_c1)>len(word_list)):
                 continue
             else:
                 Vertice.append(i)
 
+
+        for i in Vertice:
+            x_center = x_center+i[0]
+            y_center = y_center+i[1]
+            z_center = z_center+i[2]
+
+        x_center_r = x_center/len(Vertice)
+        y_center_r = y_center/len(Vertice)
+        z_center_r = z_center/len(Vertice)
 
         count = 0
         # generate surfaces based on the generated Voronoi vertices
@@ -262,6 +289,8 @@ while True:
             p2[1] = p2[1]+4*random.random()-2
             p2[2] = p2[2]+4*random.random()-2
 
+            # compute the color based on the word vector
+            color_value = compute_word_vec(word, model, pca2, pca3, pca4, 4)
             # if the word is verb, generate horizontal surface
             if res_parts[count][1] == 'VERB':
                 p1 = select_lowest_by_z(Vertice)
@@ -276,20 +305,27 @@ while True:
                 x4 = x3+p2[0]-p1[0]
                 y4 = y3+p2[1]-p1[1]
                 z4 = z3+p2[2]-p1[2]
+                #color_value = [0,0,0,0]
 
             # if the word is noun, generate vertical surface
             elif res_parts[count][1] == 'NOUN':
 
-                low = min(p1[1], p2[1],p3[1])
-                high = max(p1[1], p2[1],p3[1])
-                select = random.choice((low,high))
-                p1[1] = select
-                p2[1] = select
+                p1_1 = select_lowest_by_y(Vertice)
+                p1_2 = select_highest_by_y(Vertice)
+                p1 = random.choice((p1_1, p1_2))
+                p1[0] = p1[0]+4*random.random()-2
+                p1[1] = p1[1]+4*random.random()-2
+                p1[2] = p1[2]+4*random.random()-2
+
+                value = p1[1]
+                p2[1] = value
                 [x3, y3, z3] = solve_point_on_vector(p1[0],p1[1],p1[2], w/2, nx, ny, nz)
-                y3 = select
+                y3 = value
                 x4 = x3+p2[0]-p1[0]
                 y4 = y3+p2[1]-p1[1]
                 z4 = z3+p2[2]-p1[2]
+
+                #color_value = [1,1,1,1]
 
             else:
                 [x3, y3, z3] = solve_point_on_vector(p1[0],p1[1],p1[2], w, nx, ny, nz)
@@ -297,13 +333,13 @@ while True:
                 y4 = y3+p2[1]-p1[1]
                 z4 = z3+p2[2]-p1[2]
 
-            # compute the color based on the word vector
-            color_value = compute_word_vec(word, model, pca2, pca3, pca4, 4)
+            '''
 
             # compute the center of the current structure
             x_center = x_center+ p1[0] + p2[0] + x3 + x4
             y_center = y_center+ p1[1] + p2[1] + y3 + y4
             z_center = z_center+ p1[2] + p2[2] + z3 + z4
+            '''
 
             # generate the surface
             square = makeQuad(p1[0],p1[1], p1[2], p2[0], p2[1], p2[2], x3, y3, z3, x4, y4, z4, color_value)
@@ -311,9 +347,7 @@ while True:
             snode.addGeom(square)
             count+=1
 
-            x_center_r = x_center/(4*(count))
-            y_center_r = y_center/(4*(count))
-            z_center_r = z_center/(4*(count))
+
 
             node = NodePath(snode)
             node.setTransparency(1)
@@ -324,6 +358,7 @@ while True:
             node_list.append(node)
             alpha_list.append(howOpaque)
             node.reparentTo(render)
+            print(render.children)
 
             if count==len(word_list):
                 print("get_input = True")
