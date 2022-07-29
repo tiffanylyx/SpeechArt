@@ -36,6 +36,17 @@ When you see the following message "This sentence is finished. Please press ctrl
 
 This is just a demo to evaluate, not the final interaction model.
 
+### Algorithm Rules
+The 3D structures are generated based on the analytical results of the input sentence.
+- One 3D structure = one sentence.
+- One quad in one 3D structure = one word.
+- For each sentence, first generate #number of words in the sentence pairs of coordinates based one the sentence vector and word-vectors. Each pair of coordinates represents one word.
+- Then given the (2*number of words in the sentence) coordinates, generate the Voronoi diagams and obtain all vertices. Keep the vertices that are closer to the structure center.
+- For each word, select 2 vertices. Compute the third vertex based one the first vertex, the word length and the word sentence. The forth vertex is controlled by the 1st, 2nd and 3rd.
+
+
+
+
 ## Speech_Art Version
 Update 2022/07/22
 
