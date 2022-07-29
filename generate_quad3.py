@@ -188,7 +188,7 @@ base.taskMgr.add(spinCameraTask, "SpinCameraTask")
 while True:
     if get_input == True:
         # get input sentence
-        s = input("input:")
+        s = input("Please enter a sentence:")
         sentence = s.lower()
         get_input = False
 
@@ -361,6 +361,6 @@ while True:
             print(render.children)
 
             if count==len(word_list):
-                print("get_input = True")
+                print("This sentence is finished. Please press ctrl+c to start a new round")
                 get_input = True
             base.run()

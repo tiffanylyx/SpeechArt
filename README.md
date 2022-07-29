@@ -1,3 +1,40 @@
+## Speech_Art Version 2
+Update 2022/07/29
+
+### Update Instruction
+
+First, you need to get the latest version of the code using the following focusInCommand
+```
+git pull
+```
+There might be errors because of the github setting but I'm not sure what the errors will be... Feel free to contact me when errors raise.
+
+Then, activate the virtual environment as we did before
+```
+conda activate Speech_Art
+```
+
+Then, run the following command to install new libraries
+```
+pip install -r requirements.txt
+```
+
+Then, run the code using the following focusInCommand
+```
+python generate_quad3.py
+```
+
+In this version, the sentence is input through terminal. Type in the sentence after "Please enter a sentence:" after seeing this
+
+![image](imgs/img2.png)
+
+You will see updates on the pop-up window. Now only the first surface is shown on the screen. To see the next word, type "ctrl+c" in the terminal (I will update this soon.)
+
+When you see the following message "This sentence is finished. Please press ctrl+c to start a new round", you need to press ctrl+c to enter a new sentence. Type in the sentence after "Please enter a sentence:"
+
+![image](imgs/img3.png)
+
+This is just a demo to evaluate, not the final interaction model.
 
 ## Speech_Art Version
 Update 2022/07/22
@@ -38,11 +75,16 @@ You might need to adjust the camera in the program to explore the generated 3D s
 - Use the Middle Mouse Button to rotate.
 - Use the Left Mouse Button to pan.
 
-### Update the codes
+### When you run the codes
 To keep the program updated, run
 ```
 git pull
 ```
+Then to activate the virtual environment
+```
+conda activate Speech_Art
+```
+
 
 ### Algorithm Rules
 The 3D structures are generated based on the analytical results of the input sentence.
