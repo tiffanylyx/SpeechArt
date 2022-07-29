@@ -352,7 +352,7 @@ while True:
             node = NodePath(snode)
             node.setTransparency(1)
             # set the alpha channel based on the word vector
-            howOpaque=0.25+abs(color_value[2])*0.75
+            howOpaque=0.5+abs(color_value[2])*0.5
             node.setColorScale(1,1,1,howOpaque)
             node.setTwoSided(True)
             node_list.append(node)
