@@ -56,6 +56,7 @@ def solve_point_on_vector(x1, y1, z1, distance, vx, vy, vz):
 
     solved_value=solve([(x2-x1)**2+(y2-y1)**2+(z2-z1)**2-distance**2,(x2-x1)/vx-(y2-y1)/vy,(x2-x1)/vx-(z2-z1)/vz], [x2, y2, z2])
 
+
     r_x = keep_real(solved_value[0][0])
     r_y = keep_real(solved_value[0][1])
     r_z = keep_real(solved_value[0][2])
@@ -130,3 +131,33 @@ def compute_sent_parts(sentence):
 
 def compute_word_length(word):
     return len(word)
+
+from PIL import Image, ImageDraw, ImageFont
+
+width = 100
+height = 100
+message = "Hello boss!"
+font = ImageFont.truetype("Arial.ttf", size=40)
+
+
+def draw_text_texture(message, width, height, font, color_value):
+
+
+    img = Image.new('RGB', (width, height), color=(int(255*abs(color_value[0])), int(255*abs(color_value[1])), int(255*abs(color_value[2]))))
+
+    imgDraw = ImageDraw.Draw(img)
+
+    r = imgDraw.textbbox((0,0),message, font = font)
+    textWidth = r[2] - r[0]
+    textHeight = r[3] - r[1]
+
+    new_width = int(1.5*textWidth)
+    new_height = int(1.5*textWidth*width/height)
+
+    img = Image.new('RGB', (new_width, new_height), color=(int(255*abs(color_value[0])), int(255*abs(color_value[1])), int(255*abs(color_value[2]))))
+
+    imgDraw = ImageDraw.Draw(img)
+
+    imgDraw.text(((new_width-textWidth)/2, (new_height-textHeight)/2), message, fill=(255, 255, 0),font = font)
+
+    img.save("texture/"+message+'.png')

@@ -23,7 +23,7 @@ from panda3d.core import Material
 
 import sys
 import os
-from math import pi, sin, cos, atan
+from math import pi, sin, cos, atan, sqrt
 import numpy as np
 from sympy import *
 import random
@@ -31,10 +31,13 @@ import time
 from scipy.spatial import Voronoi
 import numpy as np
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
+import copy
 
 from utils import *
 
-
+import os
+if not os.path.exists('./texture'):
+    os.makedirs('./texture')
 
 # change the window size
 loadPrcFileData('', 'win-size 1400 700')
@@ -50,7 +53,7 @@ def normalized(*args):
 # generate a surface with given vertexs and color
 def makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, color_value):
 
-    format = GeomVertexFormat.getV3n3c4()
+    format = GeomVertexFormat.getV3n3cpt2()
     vdata = GeomVertexData('square', format, Geom.UHStatic)
 
     vertex = GeomVertexWriter(vdata, 'vertex')
@@ -73,6 +76,11 @@ def makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, color_value):
     color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
     color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
 
+    texcoord.addData2f(0, 0)
+    texcoord.addData2f(0, 1)
+    texcoord.addData2f(1, 0)
+    texcoord.addData2f(1, 1)
+
     tris = GeomTristrips(Geom.UHDynamic)
     tris.addVertices(0,1,2,3)
     '''
@@ -93,7 +101,6 @@ alight.setColor((0.9, 0.9, 0.9, 0.4))
 alnp = render.attachNewNode(alight)
 render.setLight(alnp)
 render.setAntialias(AntialiasAttrib.MAuto)
-
 
 '''
 plight = PointLight('plight')
@@ -260,7 +267,7 @@ while True:
         r = vor.vertices
         # delete points that are far away from the center
         for i in r:
-            if (abs(i[0]-x_c1)>len(word_list))|(abs(i[1]-y_c1)>len(word_list))|(abs(i[2]-z_c1)>len(word_list)):
+            if (abs(i[0]-x_c1)>1.5*len(word_list))|(abs(i[1]-y_c1)>1.5*len(word_list))|(abs(i[2]-z_c1)>1.5*len(word_list)):
                 continue
             else:
                 Vertice.append(i)
@@ -280,7 +287,10 @@ while True:
         for word in word_list:
             w = compute_word_length(word)
             [nx, ny, nz] = compute_word_vec(word, model, pca2, pca3, pca4, 3)
-            [p1, p2] = random.choices(Vertice, k=2)
+            [p_1, p_2] = random.choices(Vertice, k=2)
+            p1 = copy.deepcopy(p_1)
+            p2 = copy.deepcopy(p_2)
+            print("p1, p2",p1, p2)
             p1[0] = p1[0]+4*random.random()-2
             p1[1] = p1[1]+4*random.random()-2
             p1[2] = p1[2]+4*random.random()-2
@@ -288,11 +298,13 @@ while True:
             p2[0] = p2[0]+4*random.random()-2
             p2[1] = p2[1]+4*random.random()-2
             p2[2] = p2[2]+4*random.random()-2
+            print("p1, p2",p1, p2)
 
             # compute the color based on the word vector
             color_value = compute_word_vec(word, model, pca2, pca3, pca4, 4)
             # if the word is verb, generate horizontal surface
             if res_parts[count][1] == 'VERB':
+                print("verb")
                 p1 = select_lowest_by_z(Vertice)
                 p1[0] = p1[0]+4*random.random()-2
                 p1[1] = p1[1]+4*random.random()-2
@@ -309,6 +321,7 @@ while True:
 
             # if the word is noun, generate vertical surface
             elif res_parts[count][1] == 'NOUN':
+                print("Noun")
 
                 p1_1 = select_lowest_by_y(Vertice)
                 p1_2 = select_highest_by_y(Vertice)
@@ -328,7 +341,9 @@ while True:
                 #color_value = [1,1,1,1]
 
             else:
+                print("else")
                 [x3, y3, z3] = solve_point_on_vector(p1[0],p1[1],p1[2], w, nx, ny, nz)
+                print("nx, ny, nz", nx, ny, nz, x3, y3, z3)
                 x4 = x3+p2[0]-p1[0]
                 y4 = y3+p2[1]-p1[1]
                 z4 = z3+p2[2]-p1[2]
@@ -347,14 +362,23 @@ while True:
             snode.addGeom(square)
             count+=1
 
+            width = sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2 + (p2[2]-p1[2])**2)
+            height = sqrt((x3-p1[0])**2 + (y3-p1[1])**2 + (z3-p1[2])**2)
+            print(width, height)
 
+            draw_text_texture(word, int(50*width), int(50*height), font, color_value)
+
+
+            testTexture = loader.loadTexture("texture/"+word+".png")
 
             node = NodePath(snode)
+
             node.setTransparency(1)
             # set the alpha channel based on the word vector
             howOpaque=0.5+abs(color_value[2])*0.5
             node.setColorScale(1,1,1,howOpaque)
             node.setTwoSided(True)
+            node.setTexture(testTexture)
             node_list.append(node)
             alpha_list.append(howOpaque)
             node.reparentTo(render)
