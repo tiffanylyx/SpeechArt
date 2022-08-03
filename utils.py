@@ -16,6 +16,7 @@ from nltk import *
 from gensim.test.utils import common_texts
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 
+from textblob import TextBlob
 
 with open('model/pca4.pkl', 'rb') as pickle_file:
     pca4 = pickle.load(pickle_file)
@@ -115,7 +116,6 @@ def compute_word_vec(word, model, pca2, pca3, pca4, dim):
     vector = model.wv[word]
     if dim==2:
         res = pca2.transform([vector])[0]
-        res = [0, res[0], res[1]]
     elif dim==3:
         res = pca3.transform([vector])[0]
     elif dim==4:
@@ -132,6 +132,12 @@ def compute_sent_parts(sentence):
 def compute_word_length(word):
     return len(word)
 
+def compute_sent_sentiment(sentence):
+    res = TextBlob(sentence)
+    sentiment = res.sentiment.polarity
+    sentiment = (sentiment + 1)/2
+    return sentiment
+
 from PIL import Image, ImageDraw, ImageFont
 
 width = 100
@@ -143,6 +149,7 @@ font = ImageFont.truetype("Arial.ttf", size=40)
 def draw_text_texture(message, width, height, font, color_value):
 
 
+
     img = Image.new('RGB', (width, height), color=(int(255*abs(color_value[0])), int(255*abs(color_value[1])), int(255*abs(color_value[2]))))
 
     imgDraw = ImageDraw.Draw(img)
@@ -151,13 +158,82 @@ def draw_text_texture(message, width, height, font, color_value):
     textWidth = r[2] - r[0]
     textHeight = r[3] - r[1]
 
-    new_width = int(1.5*textWidth)
-    new_height = int(1.5*textWidth*width/height)
+    new_width = int(1.2*textWidth)
+    new_height = int(1.2*textWidth*width/height)
 
     img = Image.new('RGB', (new_width, new_height), color=(int(255*abs(color_value[0])), int(255*abs(color_value[1])), int(255*abs(color_value[2]))))
 
     imgDraw = ImageDraw.Draw(img)
 
-    imgDraw.text(((new_width-textWidth)/2, (new_height-textHeight)/2), message, fill=(255, 255, 0),font = font)
+    imgDraw.text(((new_width-textWidth)/2, (new_height-textHeight)/2), message, fill=(100,100,100),font = font)
 
     img.save("texture/"+message+'.png')
+
+
+
+def flat(nums):
+    count = 0
+    res = []
+    for i in nums:
+        if isinstance(i, list):
+            count+=1
+            res.extend(flat(i))
+
+
+        else:
+            res.append(i)
+
+    return res
+
+
+def get_cfg_structure(sent):
+    CFG_string = """
+    S -> NP VP
+    VP -> V NP | V NP PP
+    PP -> P NP | V ADJ
+    NP -> Det N | Det N PP | N
+    """
+    N_string = "N -> "
+    P_string = "P -> "
+    Det_string = "Det -> "
+    V_string = "V -> "
+    ADJ_string = "ADJ -> "
+
+    res = nltk.pos_tag(sent,tagset='universal')
+    for i in res:
+        if i[1] == "NOUN":
+            N_string+="\"" + i[0]+"\""  + "|"
+        elif i[1] == "PRON":
+            N_string+="\"" + i[0]+"\""  + "|"
+        elif i[1] == "DET":
+            Det_string+="\"" + i[0]+"\""  + "|"
+        elif i[1] == "VERB":
+            V_string+="\"" + i[0]+"\""  + "|"
+        elif i[1] == "ADP":
+            P_string+="\"" + i[0]+"\""  + " |"
+        elif i[1] == "ADJ":
+            ADJ_string+="\"" + i[0]+"\""  + " |"
+
+    CFG_string = CFG_string + N_string + "\n" + P_string + "\n" + Det_string +"\n" +  V_string + "\n" + ADJ_string
+    grammar1 = CFG.fromstring(CFG_string)
+    sent_clean = []
+    for i in sent:
+        if i in CFG_string:
+            sent_clean.append(i)
+
+    parser = nltk.ChartParser(grammar1)
+    trees = list(parser.parse(sent_clean))
+    res_count = []
+    word_parts = []
+    for tree in trees[:1]:
+        for part in tree:
+
+            res = flat(part)
+            word_parts.append(res)
+            if len(res)>1:
+                for sub_part in part:
+                    res = flat(sub_part)
+                    if len(res)>1:
+                        for sub_sub_part in sub_part:
+                            res = flat(sub_sub_part)
+    return word_parts
