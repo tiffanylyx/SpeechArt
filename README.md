@@ -43,6 +43,7 @@ The 3D structures are generated based on the analytical results of the input sen
 - For each sentence, first generate #number of words in the sentence pairs of coordinates based one the sentence vector and word-vectors. Each pair of coordinates represents one word.
 - Then given the (2*number of words in the sentence) coordinates, generate the Voronoi diagams and obtain all vertices. Keep the vertices that are closer to the structure center.
 - For each word, select 2 vertices. Compute the third vertex based one the first vertex, the word length and the word sentence. The forth vertex is controlled by the 1st, 2nd and 3rd.
+- The color of each quad (word) is decided by the word vector. The H & S value is the first 2 elements of the 3-D vector. The V value is the sentiment score of the sentence. The A value is the third element of the 3D vector.
 
 
 
