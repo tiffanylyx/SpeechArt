@@ -36,6 +36,47 @@ model = Word2Vec.load("model/word2vec_text8.model")
 model_sentence = Doc2Vec.load("model/doc2vec100_text8.model")
 
 
+# helper function to select the point with the lowest y
+def select_lowest_by_y(points):
+    y_min = 10000
+    count = 0
+    for point in points:
+        if point[1]<y_min:
+            min_index = count
+            y_min = point[1]
+        count += 1
+    return points[min_index]
+
+# helper function to select the point with the lowest y
+def select_highest_by_y(points):
+    y_max = -10000
+    count = 0
+    for point in points:
+        if point[1]>y_max:
+            max_index = count
+            y_max = point[1]
+        count += 1
+    return points[max_index]
+
+# helper function to select the point with the lowest z
+def select_lowest_by_z(points):
+    z_min = 10000
+    count = 0
+    for point in points:
+        if point[2]<z_min:
+            min_index = count
+            z_min = point[2]
+        count += 1
+    return points[min_index]
+
+def test_positive(num):
+    if num>0:
+        return 1
+    elif num<0:
+        return -1
+    elif num==0:
+        return 0
+        
 def keep_real(a):
     if not (a.is_real):
         a = abs(a)
