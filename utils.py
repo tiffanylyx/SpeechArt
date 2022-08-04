@@ -18,6 +18,10 @@ from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 
 from textblob import TextBlob
 
+import random
+
+from math import sqrt
+
 with open('model/pca4.pkl', 'rb') as pickle_file:
     pca4 = pickle.load(pickle_file)
 with open('model/pca2.pkl', 'rb') as pickle_file:
@@ -103,6 +107,57 @@ def solve_quad(x1,y1,z1,nx,ny,nz,x2,w,l):
 
     return [r_y2, r_z2, r_x3, r_y3, r_z3,r_x4, r_y4, r_z4]
 
+def solve_moving_line(x1, y1, x2, y2, distance):
+    a = Symbol('a')
+    b = Symbol('b')
+    solved_value =solve([(a-x1)**2+(b-y1)**2-distance**2,(a-x1)*(x1-x2)+(b-y1)*(y1-y2)], [a, b])
+
+    pick = random.choice((0,1))
+    r_a = keep_real(solved_value[pick][0])
+    r_b = keep_real(solved_value[pick][1])
+
+    return [r_a, r_b]
+
+def choice_random_point_on_line(p1, p2):
+
+
+    x = Symbol('x')
+    y = Symbol('y')
+    z = Symbol('z')
+
+    line = sqrt((p1[0]-p2[0])**2+(p1[1]-p2[1])**2+(p1[2]-p2[2])**2)
+
+    distance = random.random()*line
+    if (p1[2]!=p2[2]):
+
+        solved_value =solve([(x-p1[0])**2 + (y-p1[1])**2 +(z-p1[2])**2 - distance**2,(x-p1[0])*(p2[1]-p1[1])-(y-p1[1])*(p2[0]-p1[0]),(x-p1[0])*(p2[2]-p1[2])-(z-p1[2])*(p2[0]-p1[0])],[x,y,z])
+        if (keep_real(solved_value[0][0])<=max(p1[0], p2[0]))&(keep_real(solved_value[0][0])>=min(p1[0], p2[0])):
+            r_x = keep_real(solved_value[0][0])
+            r_y = keep_real(solved_value[0][1])
+            r_z = keep_real(solved_value[0][2])
+        elif (keep_real(solved_value[1][0])<=max(p1[0], p2[0]))&(keep_real(solved_value[1][0])>=min(p1[0], p2[0])):
+            r_x = keep_real(solved_value[1][0])
+            r_y = keep_real(solved_value[1][1])
+            r_z = keep_real(solved_value[1][2])
+        else:
+            [r_x, r_y, r_z] = random.choice([p1,p2])
+
+
+    elif (p1[2]==p2[2]):
+        #(x-p2[0])**2 + (y-p2[1])**2 +(0-p2[2])**2 - (line-distance)**2,
+        solved_value =solve([(x-p1[0])**2 + (y-p1[1])**2 +(0-p1[2])**2 - distance**2,(x-p1[0])*(p2[1]-p1[1])-(y-p1[1])*(p2[0]-p1[0])],[x,y])
+        if (keep_real(solved_value[0][0])<=max(p1[0], p2[0]))&(keep_real(solved_value[0][0])>=min(p1[0], p2[0])):
+            r_x = keep_real(solved_value[0][0])
+            r_y = keep_real(solved_value[0][1])
+        elif (keep_real(solved_value[1][0])<=max(p1[0], p2[0]))&(keep_real(solved_value[1][0])>=min(p1[0], p2[0])):
+            r_x = keep_real(solved_value[1][0])
+            r_y = keep_real(solved_value[1][1])
+        else:
+            [r_x, r_y, r_z] = random.choice([p1,p2])
+
+        r_z = p2[2]
+
+    return [r_x, r_y,r_z]
 
 
 
@@ -225,15 +280,28 @@ def get_cfg_structure(sent):
     trees = list(parser.parse(sent_clean))
     res_count = []
     word_parts = []
+    res_key = {}
     for tree in trees[:1]:
         for part in tree:
 
             res = flat(part)
             word_parts.append(res)
+            print("level1",part,res )
+            for i in res:
+                res_key[i] = []
+                res_key[i].append(1)
             if len(res)>1:
                 for sub_part in part:
                     res = flat(sub_part)
+                    print("level2",sub_part )
+                    for i in res:
+                        res_key[i].append(2)
                     if len(res)>1:
                         for sub_sub_part in sub_part:
                             res = flat(sub_sub_part)
-    return word_parts
+                        for i in res:
+                            res_key[i].append(3)
+                            print("level2",sub_sub_part )
+
+
+    return word_parts,res_key
