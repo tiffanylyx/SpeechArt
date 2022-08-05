@@ -56,7 +56,12 @@ loadPrcFileData('', 'win-size 1400 700')
 # set up basic functions
 base = ShowBase()
 base.setBackgroundColor(0.7,0.7,0.7)
-base.camLens.setFocalLength(30)
+base.camLens.setFocalLength(1)
+lens = PerspectiveLens()
+base.cam.node().setLens(lens)
+base.camLens.setFov(5,5)
+base.camLens.setAspectRatio(2)
+base.camLens.setFar(100)
 
 # get the running time
 previous_time = time.time()
@@ -119,19 +124,28 @@ alight.setColor((0.9, 0.9, 0.9, 0.4))
 alnp = render.attachNewNode(alight)
 render.setLight(alnp)
 render.setAntialias(AntialiasAttrib.MAuto)
-'''
+
 plight = PointLight('plight')
 plight.setColor((0.8, 0.8, 0.8, 1))
 plight.setShadowCaster(True, 512, 512)
 plnp = render.attachNewNode(plight)
 plnp.setPos(0, 10, 10)
 render.setLight(plnp)
+'''
 
 directionalLight = DirectionalLight('directionalLight')
 directionalLight.setColor((0.8, 0.8, 0.8, 1))
 directionalLightNP = render.attachNewNode(directionalLight)
 # This light is facing forwards, away from the camera.
 directionalLightNP.setHpr(0, -20, 0)
+render.setLight(directionalLightNP)
+
+directionalLight = DirectionalLight('directionalLight')
+directionalLight.setColor((0.8, 0.8, 0.8, 1))
+directionalLight.setShadowCaster(True, 512, 512)
+directionalLightNP = render.attachNewNode(directionalLight)
+# This light is facing forwards, away from the camera.
+directionalLightNP.setHpr(20, 0, 0)
 render.setLight(directionalLightNP)
 '''
 plight = PointLight('plight')
@@ -149,7 +163,8 @@ get_input = True
 # set camera control
 def spinCameraTask(task):
     base.camera.setZ(5)
-    base.camera.lookAt(x_origin, y_origin,-3)
+    base.camera.lookAt(x_origin, y_origin,-1)
+    #print(base.camLens.getFov())
 
     #base.camLens.setNear(y_origin+150)
     #base.camLens.setFar(y_center_r+400)
@@ -279,10 +294,12 @@ while True:
                 # add the framework structrue
                 frame1 = base.loader.loadModel("models/box")
                 frame1.setPosHprScale(LVecBase3(x1,y1,z1),LVecBase3(0,0,0),LVecBase3(0.1, 0.1, distance))
+                frame1.setShaderAuto()
                 frame1.reparentTo(render)
 
                 frame2 = base.loader.loadModel("models/box")
                 frame2.setPosHprScale(LVecBase3(x2,y2,z2),LVecBase3(0,0,0),LVecBase3(0.1, 0.1, distance))
+                frame2.setShaderAuto()
                 frame2.reparentTo(render)
 
                 frame3 = base.loader.loadModel("models/box")
@@ -351,6 +368,7 @@ while True:
                     node.setColorScale(1,1,1,1)
                     node.setTwoSided(True)
                     node.setTexture(testTexture)
+                    node.setShaderAuto()
                     #alpha_list.append(howOpaque)
                     node.reparentTo(render)
                     # compute the back surface of the framework
