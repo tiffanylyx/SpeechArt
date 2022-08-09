@@ -364,7 +364,7 @@ from nltk.corpus import cmudict
 
 def compute_syllables(word):
     d = cmudict.dict()
-    for x in d[word.lower()]:\
+    for x in d[word.lower()]:
         count = 0
         list = []
         for y in x:

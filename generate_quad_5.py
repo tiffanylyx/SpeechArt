@@ -125,6 +125,9 @@ class App(ShowBase):
         self.taskMgr.add(self.spinCameraTask, "SpinCameraTask")
         self.warningText = "Finish! Please input a new one."
 
+        self.instructionText1 = OnscreenText(text="Press ESC to quit the program", pos=(1.5, -0.55), scale=0.05,
+                                          fg=(1, 0.5, 0.5, 1), align=TextNode.ACenter,
+                                          mayChange=1)
 
         self.instructionText = OnscreenText(text="Press R to render the next stucture", pos=(1.5, -0.65), scale=0.05,
                                           fg=(1, 0.5, 0.5, 1), align=TextNode.ACenter,
@@ -179,6 +182,7 @@ class App(ShowBase):
 
         self.input_sentence = ''
         self.distance_offset = 0.6
+        self.render_next = False
 
         '''
         self.myMaterial = Material()
@@ -193,15 +197,16 @@ class App(ShowBase):
         self.camera.lookAt(self.x_origin, self.y_origin,-1)
         return Task.cont
     def renderSurface(self):
-        if self.index<self.count:
-            for node in self.node_dict[self.index]:
-                #node.setMaterial(self.myMaterial)
-                node.reparentTo(self.node_for_word)
-            self.index+=1
-        else:
+        if self.render_next:
+            if self.index<self.count:
+                for node in self.node_dict[self.index]:
+                    #node.setMaterial(self.myMaterial)
+                    node.reparentTo(self.node_for_word)
+                self.index+=1
+            else:
 
-            self.warning .setText(self.warningText)
-            print("This sentence is finished. Please input a new one.")
+                self.warning .setText(self.warningText)
+                print("This sentence is finished. Please input a new one.")
 
     #clear the text
     def clearText(self):
@@ -210,6 +215,7 @@ class App(ShowBase):
 
     def setText(self, s):
         if 1>0:
+            self.render_next = False
             self.warning.setText('')
             self.bk_text = s
             self.index = 0
@@ -556,9 +562,6 @@ class App(ShowBase):
                         node_dict[count].append(node_up)
                         #node.reparentTo(node_for_word)
 
-
-
-
                     # store the 8 points of the framework
                     points = [[x1, y1, z1], [x2, y2, z2], [x3, y3, z3], [x4, y4, z4],
                     [x_move1, y_move1, z1], [x_move2, y_move2, z2], [x_move1, y_move1, z3], [x_move2, y_move2, z4]]
@@ -631,6 +634,7 @@ class App(ShowBase):
         for node in self.node_dict[0]:
             node.reparentTo(self.node_for_word)
         self.index = 1
+        self.render_next = True
 
 demo = App()
 demo.run()
