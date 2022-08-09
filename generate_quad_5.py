@@ -388,7 +388,7 @@ class App(ShowBase):
                     x_move2 = x_move1+x2-x1
                     y_move2 = y_move1+y2-y1
 
-                    frameTexture = loader.loadTexture("texture/"+"black_background.png")
+                    #frameTexture = loader.loadTexture("texture/"+"black_background.png")
 
 
                     # add the framework structrue
