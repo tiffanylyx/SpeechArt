@@ -22,6 +22,11 @@ import random
 
 from math import sqrt
 
+from allennlp.predictors.predictor import Predictor
+
+#model_url = "https://storage.googleapis.com/allennlp-public-models/coref-spanbert-large-2020.02.27.tar.gz"
+#predictor = Predictor.from_path(model_url)
+
 with open('model/pca4.pkl', 'rb') as pickle_file:
     pca4 = pickle.load(pickle_file)
 with open('model/pca2.pkl', 'rb') as pickle_file:
@@ -76,7 +81,7 @@ def test_positive(num):
         return -1
     elif num==0:
         return 0
-        
+
 def keep_real(a):
     if not (a.is_real):
         a = abs(a)
@@ -243,6 +248,7 @@ font = ImageFont.truetype("Arial.ttf", size=40)
 
 
 def draw_text_texture(message, width, height, font, color_value):
+    print("testure Color",(int(255*abs(color_value[0])), int(255*abs(color_value[1])), int(255*abs(color_value[2]))))
 
 
 
@@ -346,3 +352,25 @@ def get_cfg_structure(sent):
 
 
     return word_parts,res_key
+def compute_co_reference(sentence):
+    prediction = predictor.predict(document=sentence)  # get prediction
+    print("Clsuters:-")
+    for cluster in prediction['clusters']:
+        print(cluster)  # list of clusters (the indices of spaCy tokens)
+    # Result: [[[0, 3], [26, 26]], [[34, 34], [50, 50]]]
+    return prediction['clusters']
+
+from nltk.corpus import cmudict
+
+def compute_syllables(word):
+    d = cmudict.dict()
+    for x in d[word.lower()]:\
+        count = 0
+        list = []
+        for y in x:
+            if y[-1].isdigit():
+                list.append(count)
+                count+=1
+            else:
+                count+=len(y)
+    return list
