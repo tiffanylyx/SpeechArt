@@ -22,7 +22,7 @@ import random
 
 from math import sqrt
 
-from allennlp.predictors.predictor import Predictor
+#from allennlp.predictors.predictor import Predictor
 
 #model_url = "https://storage.googleapis.com/allennlp-public-models/coref-spanbert-large-2020.02.27.tar.gz"
 #predictor = Predictor.from_path(model_url)
@@ -352,6 +352,7 @@ def get_cfg_structure(sent):
 
 
     return word_parts,res_key
+'''
 def compute_co_reference(sentence):
     prediction = predictor.predict(document=sentence)  # get prediction
     print("Clsuters:-")
@@ -359,7 +360,7 @@ def compute_co_reference(sentence):
         print(cluster)  # list of clusters (the indices of spaCy tokens)
     # Result: [[[0, 3], [26, 26]], [[34, 34], [50, 50]]]
     return prediction['clusters']
-
+'''
 from nltk.corpus import cmudict
 
 def compute_syllables(word):
