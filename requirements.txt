@@ -7,3 +7,7 @@ scikit-learn==1.1.1
 scipy==1.8.1
 textblob
 pillow
+sentence-transformers ==2.2.2
+torch==1.11.0
+allennlp==2.10.0
+allennlp-models

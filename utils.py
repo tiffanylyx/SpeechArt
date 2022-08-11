@@ -22,10 +22,18 @@ import random
 
 from math import sqrt
 
-#from allennlp.predictors.predictor import Predictor
+from allennlp.predictors.predictor import Predictor
 
-#model_url = "https://storage.googleapis.com/allennlp-public-models/coref-spanbert-large-2020.02.27.tar.gz"
-#predictor = Predictor.from_path(model_url)
+from sentence_transformers import SentenceTransformer, LoggingHandler, util, evaluation, models, InputExample
+import logging
+import os
+import gzip
+import csv
+import torch
+
+
+model_url = "https://storage.googleapis.com/allennlp-public-models/coref-spanbert-large-2020.02.27.tar.gz"
+predictor = Predictor.from_path(model_url)
 
 with open('model/pca4.pkl', 'rb') as pickle_file:
     pca4 = pickle.load(pickle_file)
@@ -34,11 +42,16 @@ with open('model/pca2.pkl', 'rb') as pickle_file:
 with open('model/pca3.pkl', 'rb') as pickle_file:
     pca3 = pickle.load(pickle_file)
 
-with open('model/pca3_sentenceVec.pkl', 'rb') as pickle_file:
+with open('model/pca3_sentenceVec_transformer.pkl', 'rb') as pickle_file:
     pca3_sentenceVec = pickle.load(pickle_file)
 #documents = [TaggedDocument(doc, [i]) for i, doc in enumerate(common_texts)]
+
+from sentence_transformers import SentenceTransformer, util
+
 model = Word2Vec.load("model/word2vec_text8.model")
-model_sentence = Doc2Vec.load("model/doc2vec100_text8.model")
+
+#model = Word2Vec.load("model/word2vec_text8.model")
+model_sentence = SentenceTransformer('all-MiniLM-L6-v2')
 
 
 # helper function to select the point with the lowest y
@@ -117,10 +130,8 @@ def solve_point_on_vector(x1, y1, z1, distance, vx, vy, vz):
 def solve_new_sec_vect(nx_s,ny_s, nz_s, x_old_1, y_old_1, z_old_1):
     vx = Symbol('vx')
     vy = Symbol('vy')
-    print(nx_s,ny_s, nz_s, x_old_1, y_old_1, z_old_1)
 
     solved_value=solve([vx*nx_s+vy*ny_s,vx*x_old_1+vy*y_old_1], [vx, vy])
-    print("solved_value",solved_value)
 
     r_vx = keep_real(solved_value[vx])
     r_vy = keep_real(solved_value[vy])
@@ -207,11 +218,13 @@ def choice_random_point_on_line(p1, p2):
 
 
 
-def compute_sent_vec(sentence, model):
-
-    vector = model.infer_vector(sentence.split(" "))
+def compute_sent_vec(sentence, model,pca3_sentenceVec):
+    vector = model.encode(sentence, convert_to_tensor=False)
+    res = pca3_sentenceVec.transform([vector])[0]
+    print(res)
+    normalized_res = res/np.linalg.norm(res)
     #res = pca3_sentenceVec.transform([vector])
-    return vector[1:4]
+    return normalized_res
 
 def compute_word_vec(word, model, pca2, pca3, pca4, dim):
     vector = model.wv[word]
@@ -248,7 +261,6 @@ font = ImageFont.truetype("Arial.ttf", size=40)
 
 
 def draw_text_texture(message, width, height, font, color_value):
-    print("testure Color",(int(255*abs(color_value[0])), int(255*abs(color_value[1])), int(255*abs(color_value[2]))))
 
 
 
@@ -320,8 +332,9 @@ def get_cfg_structure(sent):
     grammar1 = CFG.fromstring(CFG_string)
     sent_clean = []
     for i in sent:
-        if i in CFG_string:
+        if "\""+i+"\"" in CFG_string:
             sent_clean.append(i)
+    print("sent_clean",sent_clean)
 
     parser = nltk.ChartParser(grammar1)
     trees = list(parser.parse(sent_clean))
@@ -333,14 +346,12 @@ def get_cfg_structure(sent):
 
             res = flat(part)
             word_parts.append(res)
-            print("level1",part,res )
             for i in res:
                 res_key[i] = []
                 res_key[i].append(1)
             if len(res)>1:
                 for sub_part in part:
                     res = flat(sub_part)
-                    print("level2",sub_part )
                     for i in res:
                         res_key[i].append(2)
                     if len(res)>1:
@@ -348,19 +359,15 @@ def get_cfg_structure(sent):
                             res = flat(sub_sub_part)
                         for i in res:
                             res_key[i].append(3)
-                            print("level2",sub_sub_part )
 
 
     return word_parts,res_key
-'''
+
 def compute_co_reference(sentence):
     prediction = predictor.predict(document=sentence)  # get prediction
-    print("Clsuters:-")
-    for cluster in prediction['clusters']:
-        print(cluster)  # list of clusters (the indices of spaCy tokens)
-    # Result: [[[0, 3], [26, 26]], [[34, 34], [50, 50]]]
+
     return prediction['clusters']
-'''
+
 from nltk.corpus import cmudict
 
 def compute_syllables(word):
