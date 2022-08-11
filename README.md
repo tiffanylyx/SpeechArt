@@ -1,3 +1,27 @@
+## Speech_Art Version 5
+Update 2022/08/11
+
+First, you need to get the latest version of the code using the following focusInCommand
+```
+git pull
+```
+Then, activate the virtual environment as we did before
+```
+conda activate Speech_Art
+```
+Then, run the following command to install new libraries
+```
+pip install -r requirements.txt
+```
+Then, run the following command
+```
+conda install -c huggingface transformers
+```
+Then, run the following command to run the program
+```
+python generate_quad5.py
+```
+There might be some error because of the MAC OS system.
 ## Speech_Art Version 2
 Update 2022/07/29
 
