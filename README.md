@@ -22,6 +22,32 @@ Then, run the following command to run the program
 python generate_quad5.py
 ```
 There might be some error because of the MAC OS system.
+
+### Algorithm Rules
+#### Current language features:
+##### Document-Based:
+- Co-reference: Build connections between different cluster (transformer)
+- Document Sentiment: Control the AmbientLight
+##### Sentence-Based:
+- Parts of Speech: Decide frameworks’ color
+- Sentence Vector (Bert): Decide clusters’ starting position
+- Sentence Sentiment: Decide clusters’ color (V)
+- CFG-Grammer Analysis: Decide frameworks’ dimension
+##### Word-Based:
+- Word Vector: Decide frameworks’ coordinates
+- Syllables Analysis: Decide colors inside frameworks
+- Word length: Decide # of surfaces inside frameworks
+(Keyword adding)
+
+#### Other Features:
+- GAN to generate surfaces inside frameworks (working)
+- Shadow
+- Moving Camera
+- Text Input Box
+- Adding Dialog
+- Changes on the existing clusters
+
+
 ## Speech_Art Version 2
 Update 2022/07/29
 
