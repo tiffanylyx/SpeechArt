@@ -175,6 +175,30 @@ def solve_moving_line(x1, y1, x2, y2, distance):
 
     return [r_a, r_b]
 
+
+
+def choose_point_on_two_point(p1, p2, distance):
+
+    x = Symbol('x')
+    y = Symbol('y')
+    z = Symbol('z')
+
+
+    solved_value =solve([(x-p1[0])**2 + (y-p1[1])**2 +(z-p1[2])**2 - distance**2,(x-p1[0])*(p2[1]-p1[1])-(y-p1[1])*(p2[0]-p1[0]),(x-p1[0])*(p2[2]-p1[2])-(z-p1[2])*(p2[0]-p1[0])],[x,y,z])
+    if ((keep_real(solved_value[0][0])-p2[0])**2 + (keep_real(solved_value[0][1])-p2[1])**2 +(keep_real(solved_value[0][2])-p2[2])**2>distance**2):
+        r_x = keep_real(solved_value[0][0])
+        r_y = keep_real(solved_value[0][1])
+        r_z = keep_real(solved_value[0][2])
+    elif ((keep_real(solved_value[1][0])-p2[0])**2 + (keep_real(solved_value[1][1])-p2[1])**2 +(keep_real(solved_value[1][2])-p2[2])**2>distance**2):
+        r_x = keep_real(solved_value[1][0])
+        r_y = keep_real(solved_value[1][1])
+        r_z = keep_real(solved_value[1][2])
+
+
+
+    return [r_x, r_y,r_z]
+
+
 def choice_random_point_on_line(p1, p2):
 
 

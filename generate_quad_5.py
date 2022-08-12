@@ -54,10 +54,7 @@ if not os.path.exists('./texture'):
 
 # change the window size
 loadPrcFileData('', 'win-size 1400 700')
-
-
-
-
+os.environ["CURL_CA_BUNDLE"]=""
 
 # You can't normalize inline so this is a helper function
 def normalized(*args):
@@ -174,8 +171,6 @@ class App(ShowBase):
         render.setShaderAuto()
         render.setAntialias(AntialiasAttrib.MAuto)
 
-
-
         self.accept("escape", sys.exit)
         self.accept("r", self.renderSurface)
 
@@ -193,12 +188,52 @@ class App(ShowBase):
         self.rendered_connection =[]
         self.z_origin = -3
 
+        self.x_origin_pre = 0
+        self.y_origin_pre = 0
+        self.z_origin_pre = 0
+
+        self.compute = 0
+        self.move_camera = False
+
 
 
 
     def spinCameraTask(self, task):
-        self.camera.setZ(self.z_origin+8)
-        self.camera.lookAt(self.x_origin, self.y_origin,self.z_origin+2)
+        R = 0
+        if task.time%100==0:
+            print("self.camera.getPos()", self.camera.getPos())
+        if self.move_camera:
+
+            self.camera.setZ(self.z_origin+8)
+            '''
+
+            self.camera.lookAt(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000,
+                               self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/1000,
+                               self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000)
+            '''
+            angleDegrees = task.time * 6.0
+            angleRadians = angleDegrees * (pi / 180.0)
+            self.camera.setPos(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000+50 * sin(angleRadians),
+                               self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/1000-50 * cos(angleRadians),
+                               self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000+8)
+            self.camera.setHpr(angleDegrees, 0, R)
+            if self.compute<500:
+                self.compute += 2
+            elif self.compute<1000:
+                self.compute += 1
+
+            elif self.compute==1000:
+                R = self.camera.getR()
+                print("R",R)
+                '''
+                angleDegrees = task.time * 6.0
+                angleRadians = angleDegrees * (pi / 180.0)
+                self.camera.setPos(self.x_origin+40 * sin(angleRadians), self.y_origin-40 * cos(angleRadians), self.z_origin+8)
+                self.camera.setHpr(angleDegrees, 0, R)
+                '''
+
+
+
         return Task.cont
     def renderSurface(self):
         if self.render_next:
@@ -246,6 +281,8 @@ class App(ShowBase):
 
     def setText(self, s):
         if 1>0:
+            self.move_camera = False
+            self.compute = 0
             self.render_next = False
             self.warning.setText('')
             self.bk_text = s
@@ -280,15 +317,20 @@ class App(ShowBase):
             i1 = 1#random.choice((1,-1))#test_positive(sent_vect[1])
             i2 = 1#random.choice((1,-1))#test_positive(sent_vect[2])
 
+            self.x_origin_pre = copy.deepcopy(self.x_origin)
+            self.y_origin_pre = copy.deepcopy(self.y_origin)
+            self.z_origin_pre = copy.deepcopy(self.z_origin)
+
             # compute the starting position of the new structure
             [x_origin, y_origin,z_origin] = solve_point_on_vector(0,0,0, time_period*self.distance_offset, i0*sent_vect[0],i1*sent_vect[1], i2*sent_vect[2])
             self.x_origin = x_origin
             self.y_origin = y_origin
-            z_origin = min(-3,max(3,z_origin))
+            z_origin = min(-5,max(5,z_origin))
             self.z_origin = z_origin
 
             # compute parts of the speech of the given sentence
             res_parts = compute_sent_parts(sentence)
+
 
             # seperate the sentence into word list
             word_list = sentence.split(" ")
@@ -303,6 +345,7 @@ class App(ShowBase):
 
             # get the grammar analysis result. Split the sentence into :Noun Prase (NP) and Verb Prase(VP) and get the level of each word
             word_parts, res_key = get_cfg_structure(word_list)
+
             if len(word_parts)==0:
                 word_parts = word_list
                 sub_sentences = [sentence]
@@ -317,10 +360,9 @@ class App(ShowBase):
                     sub_sentences[-1] = sentence.lstrip(sub_sentences[0])
                 else:
                     sub_sentences = sentence.split(" "+split_word+" ")
-                    sub_sentences[0] = sub_sentences[0]
-                    sub_sentences[-1] = split_word+" "+sub_sentences[-1]
-
-
+                    if len(sub_sentences)>1:
+                        sub_sentences[0] = sub_sentences[0]
+                        sub_sentences[-1] = split_word+" "+sub_sentences[-1]
             count = 0
 
             # process the subsentence (NP and VP)
@@ -335,6 +377,7 @@ class App(ShowBase):
 
                 # process each word in the sub sentence
                 for word in sub_word_list:
+
                     node_dict[count] = []
 
 
@@ -722,6 +765,10 @@ class App(ShowBase):
         self.x_origin = self.x_origin/len(word_list)
         self.y_origin = self.y_origin/len(word_list)
 
+        print(choose_point_on_two_point([self.x_origin,self.y_origin,self.z_origin], [self.x_origin_pre,self.y_origin_pre,self.z_origin_pre], 15))
+        print("camera",[self.x_origin,self.y_origin,self.z_origin], [self.x_origin_pre,self.y_origin_pre,self.z_origin_pre])
+
+
         self.node_dict = node_dict
         self.count = count
         for node in self.node_dict[0]:
@@ -729,6 +776,7 @@ class App(ShowBase):
         self.index = 1
         self.render_next = True
         print(self.store_position)
+        self.move_camera = True
 
 
 
