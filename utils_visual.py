@@ -16,7 +16,7 @@ def normalized(*args):
 
 
 # generate a surface with given vertexs and color
-def makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, color_value):
+def makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, color_value,origin):
 
     format = GeomVertexFormat.getV3n3c4t2()
     vdata = GeomVertexData('square', format, Geom.UHStatic)
@@ -25,10 +25,10 @@ def makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, color_value):
     normal = GeomVertexWriter(vdata, 'normal')
     texcoord = GeomVertexWriter(vdata, 'texcoord')
 
-    vertex.addData3(x1, y1, z1)
-    vertex.addData3(x2, y2, z2)
-    vertex.addData3(x3, y3, z3)
-    vertex.addData3(x4, y4, z4)
+    vertex.addData3(x1-origin[0], y1-origin[1], z1-origin[2])
+    vertex.addData3(x2-origin[0], y2-origin[1], z2-origin[2])
+    vertex.addData3(x3-origin[0], y3-origin[1], z3-origin[2])
+    vertex.addData3(x4-origin[0], y4-origin[1], z4-origin[2])
 
     normal.addData3(normalized(0,0,1))
     normal.addData3(normalized(0,0,1))
