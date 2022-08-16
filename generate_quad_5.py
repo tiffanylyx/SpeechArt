@@ -2,10 +2,10 @@
 ## Version 5
 ## created on Aug 5, 2022
 
-## update on Aug 16 : adding camera mood, debugging, adding lighting temperature changing 
+## update on Aug 16 : adding camera mood, debugging, adding lighting temperature changing, restructure colde
 ## and adding position changes to the existing structure based on co-reference result
 
-## update on Aug 12: adding automated camera, adding colorful surface, adding bert model
+## update on Aug 12: adding automated camera, adding colorful surface, adding bert model, restructure colde
 
 # You can find the source code of the following functions on this page. Some might not be avaliable on this page.
 # https://docs.panda3d.org/1.10/python/_modules/index
