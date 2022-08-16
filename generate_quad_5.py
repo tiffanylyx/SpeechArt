@@ -1,7 +1,11 @@
 # This version constructs frameworks for every input sentence and generate structrue.
 ## Version 5
-## Aug 5, 2022
-## update on Aug 16
+## created on Aug 5, 2022
+
+## update on Aug 16 : adding camera mood, debugging,
+## and adding position changes to the existing structure based on co-reference result
+
+## update on Aug 12: adding automated camera, adding colorful surface, adding bert model
 
 # You can find the source code of the following functions on this page. Some might not be avaliable on this page.
 # https://docs.panda3d.org/1.10/python/_modules/index
@@ -178,18 +182,15 @@ class App(ShowBase):
             self.camera.lookAt(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000,
                                self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/1000,
                                self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000)
-            
+
             if self.compute<500:
                 self.compute += 2
             elif self.compute<1000:
                 self.compute += 1
             elif self.compute==1000:
                 R = self.camera.getR()
-
-
-
-
         return Task.cont
+
     def renderSurface(self):
         if self.render_next:
             if self.index<self.count:
