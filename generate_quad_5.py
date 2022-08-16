@@ -1,6 +1,7 @@
 # This version constructs frameworks for every input sentence and generate structrue.
 ## Version 5
 ## Aug 5, 2022
+
 # You can find the source code of the following functions on this page. Some might not be avaliable on this page.
 # https://docs.panda3d.org/1.10/python/_modules/index
 from direct.showbase.ShowBase import ShowBase,LVecBase3,LQuaternion
@@ -23,7 +24,7 @@ from panda3d.core import PerspectiveLens
 from panda3d.core import CardMaker
 from panda3d.core import Light, Spotlight
 from panda3d.core import TextNode
-from panda3d.core import LVector3
+
 from panda3d.core import loadPrcFileData
 from panda3d.core import NodePath
 from panda3d.core import Material
@@ -45,8 +46,11 @@ import copy
 import colorsys
 import os
 from nltk import *
+from textblob import TextBlob
 
-from utils import *
+from utils_geom import *
+from utils_nlp import *
+from utils_visual import *
 
 
 if not os.path.exists('./texture'):
@@ -55,55 +59,6 @@ if not os.path.exists('./texture'):
 # change the window size
 loadPrcFileData('', 'win-size 1400 700')
 os.environ["CURL_CA_BUNDLE"]=""
-
-# You can't normalize inline so this is a helper function
-def normalized(*args):
-    myVec = LVector3(*args)
-    myVec.normalize()
-    return myVec
-
-# generate a surface with given vertexs and color
-def makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, color_value):
-
-    format = GeomVertexFormat.getV3n3c4t2()
-    vdata = GeomVertexData('square', format, Geom.UHStatic)
-    color = GeomVertexWriter(vdata, 'color')
-    vertex = GeomVertexWriter(vdata, 'vertex')
-    normal = GeomVertexWriter(vdata, 'normal')
-    texcoord = GeomVertexWriter(vdata, 'texcoord')
-
-    vertex.addData3(x1, y1, z1)
-    vertex.addData3(x2, y2, z2)
-    vertex.addData3(x3, y3, z3)
-    vertex.addData3(x4, y4, z4)
-
-    normal.addData3(normalized(0,0,1))
-    normal.addData3(normalized(0,0,1))
-    normal.addData3(normalized(0,0,1))
-    normal.addData3(normalized(0,0,1))
-
-    if color_value[0]==1:
-
-        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
-        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
-        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
-        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
-    else:
-        for color_v in color_value:
-            color.addData4(abs(color_v[0]), abs(color_v[1]), abs(color_v[2]), 1)
-
-    texcoord.addData2f(0, 0)
-    texcoord.addData2f(0, 1)
-    texcoord.addData2f(1, 0)
-    texcoord.addData2f(1, 1)
-
-    tris = GeomTristrips(Geom.UHDynamic)
-    tris.addVertices(0,1,2,3)
-
-    # store the generated Geom function
-    square = Geom(vdata)
-    square.addPrimitive(tris)
-    return square
 
 
 
@@ -175,7 +130,8 @@ class App(ShowBase):
         self.accept("r", self.renderSurface)
 
         self.count = 0
-        self.node_for_word = render.attachNewNode("node_for_word")
+        self.node_for_render = render.attachNewNode("node_for_render")
+        self.node_for_sentence = 0
         self.index = 0
 
         self.input_sentence = ''
@@ -194,6 +150,8 @@ class App(ShowBase):
 
         self.compute = 0
         self.move_camera = False
+        self.input_sentence_number = 0
+        self.sum_sentiment = 0
 
 
 
@@ -205,12 +163,7 @@ class App(ShowBase):
         if self.move_camera:
 
             self.camera.setZ(self.z_origin+8)
-            '''
 
-            self.camera.lookAt(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000,
-                               self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/1000,
-                               self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000)
-            '''
             angleDegrees = task.time * 6.0
             angleRadians = angleDegrees * (pi / 180.0)
             self.camera.setPos(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000+50 * sin(angleRadians),
@@ -224,7 +177,6 @@ class App(ShowBase):
 
             elif self.compute==1000:
                 R = self.camera.getR()
-                print("R",R)
                 '''
                 angleDegrees = task.time * 6.0
                 angleRadians = angleDegrees * (pi / 180.0)
@@ -240,7 +192,7 @@ class App(ShowBase):
             if self.index<self.count:
                 for node in self.node_dict[self.index]:
                     #node.setMaterial(self.myMaterial)
-                    node.reparentTo(self.node_for_word)
+                    node.reparentTo(self.node_for_sentence)
                 self.index+=1
                 if self.index==self.count:
                     for i in self.co_reference:
@@ -254,7 +206,6 @@ class App(ShowBase):
                                 word_connect = word_tokenize(self.input_sentence)[index:index+1]
 
                                 position_pre = copy.deepcopy(position_now)
-                                print("here", word_connect[0]+str(index))
                                 position_now = self.store_position.get(word_connect[0]+str(index))
 
                                 if [position_pre,position_now] not in self.rendered_connection:
@@ -267,12 +218,15 @@ class App(ShowBase):
                                     frame.setTextureOff(1)
                                     frame.setTransparency(1)
                                     frame.setColorScale(1,0,0,1)
-                                    frame.reparentTo(self.node_for_word)
+                                    frame.reparentTo(self.node_for_render)
                                     self.rendered_connection.append([position_pre,position_now])
 
             else:
                 self.warning.setText(self.warningText)
                 print("This sentence is finished. Please input a new one.")
+                print(self.node_for_render.getChild(self.input_sentence_number-1))
+                print(self.node_for_render.getChild(self.input_sentence_number-1).getPos())
+
 
     #clear the text
     def clearText(self):
@@ -281,6 +235,8 @@ class App(ShowBase):
 
     def setText(self, s):
         if 1>0:
+            self.node_for_sentence = self.node_for_render.attachNewNode("node_for_"+str(self.input_sentence_number))
+            self.input_sentence_number += 1
             self.move_camera = False
             self.compute = 0
             self.render_next = False
@@ -289,7 +245,11 @@ class App(ShowBase):
             self.index = 0
             node_dict = {}
             # get input sentence
-            sentence = s.lower()
+            s_org = s.lower()
+            sentence1 = TextBlob(s_org)
+            sentence = str(sentence1.correct())
+            print(sentence)
+
 
 
             # stop sentence input
@@ -302,8 +262,6 @@ class App(ShowBase):
             self.input_sentence = self.input_sentence+" " + sentence
 
             self.co_reference = compute_co_reference(self.input_sentence)
-            print("co_reference",self.co_reference)
-
 
             # clean the sentence
             if sentence[-1]==".":
@@ -325,7 +283,11 @@ class App(ShowBase):
             [x_origin, y_origin,z_origin] = solve_point_on_vector(0,0,0, time_period*self.distance_offset, i0*sent_vect[0],i1*sent_vect[1], i2*sent_vect[2])
             self.x_origin = x_origin
             self.y_origin = y_origin
-            z_origin = min(-5,max(5,z_origin))
+            if z_origin>5:
+                z_origin = 5
+            elif z_origin<-5:
+                z_origin = -5
+
             self.z_origin = z_origin
 
             # compute parts of the speech of the given sentence
@@ -336,6 +298,11 @@ class App(ShowBase):
             word_list = sentence.split(" ")
             # compute the sentiment value of the given sentence
             sentiment = compute_sent_sentiment(sentence)
+            self.sum_sentiment+=sentiment
+
+            temperature = 6500-6500*self.sum_sentiment/self.input_sentence_number
+            print("temperature", temperature)
+            self.alnp.node().setColorTemperature(temperature)
 
             # initiate variables
             x_center = 0
@@ -370,10 +337,8 @@ class App(ShowBase):
                 # compute the sentence vector of the sub sentence
                 sub_sent_vect = compute_sent_vec(sub_sentence, model_sentence,pca3_sentenceVec)
                 sub_word_list = sub_sentence.split(' ')
-                print("x_origin, y_origin,z_origin",x_origin, y_origin,z_origin)
                 # compute the starting point based on the origin position, the length of the sub sentence and the sub sentence vector.
                 [x_old_1, y_old_1,z_old_1] = solve_point_on_vector(x_origin, y_origin,z_origin, len(sub_word_list), i0*sub_sent_vect[0], i1*sub_sent_vect[1], i2*sub_sent_vect[2])
-
 
                 # process each word in the sub sentence
                 for word in sub_word_list:
@@ -385,7 +350,7 @@ class App(ShowBase):
                         continue
                     syllables = compute_syllables(word)
                     # add some randomness
-                    random.shuffle(sub_sent_vect)
+                    #random.shuffle(sub_sent_vect)
                     # compute the 3D word vector
                     [nx, ny, nz] = compute_word_vec(word, model, pca2, pca3, pca4, 3)
                     # compute the word length
@@ -494,7 +459,6 @@ class App(ShowBase):
                     frame1.setShaderAuto()
 
                     node_dict[count].append(frame1)
-                    #frame1.reparentTo(node_for_word)
 
                     frame2 = self.loader.loadModel("models/box")
                     frame2.setPosHprScale(LVecBase3(x2,y2,z2),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
@@ -503,7 +467,6 @@ class App(ShowBase):
                     frame2.setColorScale(0, 0.1, 0.2,0.6)
                     frame2.setShaderAuto()
                     node_dict[count].append(frame2)
-                    #frame2.reparentTo(node_for_word)
 
                     frame3 = self.loader.loadModel("models/box")
                     frame3.setPosHprScale(LVecBase3(x_move1,y_move1,z1),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
@@ -511,7 +474,6 @@ class App(ShowBase):
                     frame3.setTransparency(1)
                     frame3.setColorScale(0, 0.1, 0.2,0.6)
                     node_dict[count].append(frame3)
-                    #frame3.reparentTo(node_for_word)
 
                     frame4 = self.loader.loadModel("models/box")
                     frame4.setPosHprScale(LVecBase3(x_move2,y_move2,z2),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
@@ -519,7 +481,6 @@ class App(ShowBase):
                     frame4.setTransparency(1)
                     frame4.setColorScale(0, 0.1, 0.2,0.6)
                     node_dict[count].append(frame4)
-                    #frame4.reparentTo(node_for_word)
 
                     frame5 = self.loader.loadModel("models/box")
                     frame5.setPosHprScale(LVecBase3(x1,y1,z1),LVecBase3(atan2(y_move1-y1, x_move1-x1)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
@@ -527,7 +488,6 @@ class App(ShowBase):
                     frame5.setTransparency(1)
                     frame5.setColorScale(0, 0.1, 0.2,0.6)
                     node_dict[count].append(frame5)
-                    #frame5.reparentTo(node_for_word)
 
                     frame6 = self.loader.loadModel("models/box")
                     frame6.setPosHprScale(LVecBase3(x2,y2,z2),LVecBase3(atan2(y_move2-y2, x_move2-x2)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
@@ -535,7 +495,6 @@ class App(ShowBase):
                     frame6.setTransparency(1)
                     frame6.setColorScale(0, 0.1, 0.2,0.6)
                     node_dict[count].append(frame6)
-                    #frame6.reparentTo(node_for_word)
 
                     frame7 = self.loader.loadModel("models/box")
                     frame7.setPosHprScale(LVecBase3(x1,y1,z3),LVecBase3(atan2(y_move1-y1, x_move1-x1)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
@@ -543,7 +502,6 @@ class App(ShowBase):
                     frame7.setTransparency(1)
                     frame7.setColorScale(0, 0.1, 0.2,0.6)
                     node_dict[count].append(frame7)
-                    #frame7.reparentTo(node_for_word)
 
                     frame8 = self.loader.loadModel("models/box")
                     frame8.setPosHprScale(LVecBase3(x2,y2,z4),LVecBase3(atan2(y_move2-y2, x_move2-x2)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
@@ -551,7 +509,6 @@ class App(ShowBase):
                     frame8.setTransparency(1)
                     frame8.setColorScale(0, 0.1, 0.2,0.6)
                     node_dict[count].append(frame8)
-                    #frame8.reparentTo(node_for_word)
 
                     frame9 = self.loader.loadModel("models/box")
                     frame9.setPosHprScale(LVecBase3(x1,y1,z1),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
@@ -630,8 +587,6 @@ class App(ShowBase):
                         node_f.setTexture(testTexture)
                         node_f.setShaderAuto()
                         node_dict[count].append(node_f)
-                        #alpha_list.append(howOpaque)
-                        #node.reparentTo(node_for_word)
                         # compute the back surface of the framework
                         square_b = makeQuad(x_move1, y_move1, z1, x_move2, y_move2, z2, x_move1, y_move1, z3, x_move2, y_move2, z4, [1,1,1,1])
 
@@ -646,7 +601,6 @@ class App(ShowBase):
                         node_b.setTwoSided(True)
                         node_b.setTexture(testTexture)
                         node_dict[count].append(node_b)
-                        #node.reparentTo(node_for_word)
 
                     # if the word is a verb, draw the horizontal surfaces of the frame
                     elif res_parts[count][1] == 'VERB':
@@ -670,7 +624,6 @@ class App(ShowBase):
                         node_bottom.setTwoSided(True)
                         node_bottom.setTexture(testTexture)
                         node_dict[count].append(node_bottom)
-                        #node.reparentTo(node_for_word)
 
                         # draw the top surface of the framework
                         square_up = makeQuad(x1, y1, z3, x2, y2, z4, x_move1, y_move1, z3, x_move2, y_move2, z4, [1,1,1,1])
@@ -685,24 +638,12 @@ class App(ShowBase):
                         node_up.setTwoSided(True)
                         node_up.setTexture(testTexture)
                         node_dict[count].append(node_up)
-                        #node.reparentTo(node_for_word)
 
                     # store the 8 points of the framework
                     points = [[x1, y1, z1], [x2, y2, z2], [x3, y3, z3], [x4, y4, z4],
                     [x_move1, y_move1, z1], [x_move2, y_move2, z2], [x_move1, y_move1, z3], [x_move2, y_move2, z4]]
 
-                    x_c = 0
-                    y_c = 0
-                    z_c = 0
 
-                    # compute the center of the framework
-                    for i in points:
-                        x_c +=i[0]
-                        y_c +=i[1]
-                        z_c +=i[2]
-                    x_c_r = x_c/8
-                    y_c_r = y_c/8
-                    z_c_r = z_c/8
 
                     # add some random points inside the framework
                     for i in range(w):
@@ -760,8 +701,8 @@ class App(ShowBase):
                     node_in.setColorScale(1,1,1,howOpaque)
                     node_in.setTwoSided(True)
                     node_dict[count].append(node_in)
-
                     count+=1
+
         self.x_origin = self.x_origin/len(word_list)
         self.y_origin = self.y_origin/len(word_list)
 
@@ -772,10 +713,9 @@ class App(ShowBase):
         self.node_dict = node_dict
         self.count = count
         for node in self.node_dict[0]:
-            node.reparentTo(self.node_for_word)
+            node.reparentTo(self.node_for_sentence)
         self.index = 1
         self.render_next = True
-        print(self.store_position)
         self.move_camera = True
 
 
