@@ -167,15 +167,18 @@ class App(ShowBase):
 
             angleDegrees = task.time * 6.0
             angleRadians = angleDegrees * (pi / 180.0)
+            # Choice 1: Fully automated camera (moving the image center and rotate)
             '''
             self.camera.setPos(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000+50 * sin(angleRadians),
                                self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/1000-50 * cos(angleRadians),
                                self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000+8)
+            self.camera.setHpr(angleDegrees, 0, R)
             '''
+            # Choice 2: Half automated camera (moving the image center)
             self.camera.lookAt(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000,
                                self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/1000,
                                self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000)
-            #self.camera.setHpr(angleDegrees, 0, R)
+            
             if self.compute<500:
                 self.compute += 2
             elif self.compute<1000:
