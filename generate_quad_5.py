@@ -2,7 +2,7 @@
 ## Version 5
 ## created on Aug 5, 2022
 
-## update on Aug 16 : adding camera mood, debugging,
+## update on Aug 16 : adding camera mood, debugging, adding lighting temperature changing 
 ## and adding position changes to the existing structure based on co-reference result
 
 ## update on Aug 12: adding automated camera, adding colorful surface, adding bert model
