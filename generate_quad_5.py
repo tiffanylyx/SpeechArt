@@ -2,6 +2,8 @@
 ## Version 5
 ## created on Aug 5, 2022
 
+## update on Aug 17 : adding keybaord control, debug
+
 ## update on Aug 16 : adding camera mood, debugging, adding lighting temperature changing, restructure colde
 ## and adding position changes to the existing structure based on co-reference result
 
@@ -69,10 +71,19 @@ os.environ["CURL_CA_BUNDLE"]=""
 
 
 class App(ShowBase):
+    def makeStatusLabel(self, text,i):
+        return OnscreenText(text=text,
+            parent=base.a2dTopLeft, align=TextNode.ALeft,
+            style=1, fg=(1, 1, 0, 1), shadow=(0, 0, 0, .4),
+            pos=(0.06, -0.4-(.06 * i)), scale=.05, mayChange=True)
+
+
     def __init__(self):
         # Initialize the ShowBase class from which we inherit, which will
+
         # create a window and set up everything we need for rendering into it.
         ShowBase.__init__(self)
+        self.keyboard = False
 
         # set up basic functions
         self.setBackgroundColor(0.7,0.7,0.7)
@@ -83,28 +94,27 @@ class App(ShowBase):
         self.camLens.setAspectRatio(2)
         self.camLens.setFar(100)
         self.taskMgr.add(self.spinCameraTask, "SpinCameraTask")
+
         self.warningText = "Finish! Please input a new one."
 
-        self.instructionText1 = OnscreenText(text="Press ESC to quit the program", pos=(1.5, -0.55), scale=0.05,
-                                          fg=(1, 0.5, 0.5, 1), align=TextNode.ACenter,
-                                          mayChange=1)
 
-        self.instructionText = OnscreenText(text="Press R to render the next stucture", pos=(1.5, -0.65), scale=0.05,
-                                          fg=(1, 0.5, 0.5, 1), align=TextNode.ACenter,
-                                          mayChange=1)
+        self.instructionText = self.makeStatusLabel("Press ESC to quit the program",1.5)
+        self.instructionText1 = self.makeStatusLabel("Press R to render the next stucture",3)
+        self.instructionText2 = self.makeStatusLabel("Press C to switch the camera mode",4.5)
+        self.instructionText3 = self.makeStatusLabel("Press B to turn on and off the frames",6)
+        self.instructionText4 = self.makeStatusLabel("Press Up and Down to control the camera",7.5)
+        self.instructionText4_ = self.makeStatusLabel("distance in the automated mode",8.5)
+        self.instructionText5 = self.makeStatusLabel("Press W and S to control the z-position of",10)
+        self.instructionText5_ = self.makeStatusLabel("the camera in the automated mode",11)
+
         #add text entry
-        self.warning = OnscreenText(text='', pos=(1.5, -0.95), scale=0.05,
-                                          fg=(1, 0.5, 0.5, 1), align=TextNode.ACenter,
-                                          mayChange=1)
+        self.warning = self.makeStatusLabel(" ",0)
 
-        self.entry = DirectEntry(text = "", scale=.05, command=self.setText, pos=(1.13, 0,-0.73),
-            initialText="Type Something", numLines = 4, focus=1, focusInCommand=self.clearText,width = 15)
-        self.node_dict = {}
-        # get the running time
-        self.previous_time = time.time()
-        self.x_origin = 0
-        self.y_origin = 0
-        self.get_input = True
+        self.entry = DirectEntry(text = "", scale=.05, command=self.setText, pos=(-1.95, -0.1,0.85),
+        initialText="Type Something", numLines = 4, focus=1, focusInCommand=self.clearText,width = 15)
+
+
+        # initialize the lighting setup
 
         self.alight = AmbientLight('alight')
         self.alight.setColor((1,1,1,1))
@@ -131,13 +141,31 @@ class App(ShowBase):
         render.setShaderAuto()
         render.setAntialias(AntialiasAttrib.MAuto)
 
+        # control the event
         self.accept("escape", sys.exit)
         self.accept("r", self.renderSurface)
+        self.accept("c", self.camera_control)
+        self.accept("b", self.box_frame_control)
+        self.accept("arrow_up", self.camera_distance_control_add)
+        self.accept("arrow_down", self.camera_distance_control_minus)
+        self.accept("w", self.camera_z_control_add)
+        self.accept("s", self.camera_z_control_minue)
+
+
+        self.node_dict = {}
+        # get the running time
+        self.previous_time = time.time()
+        self.x_origin = 0
+        self.y_origin = 0
+        self.get_input = True
+
 
         self.count = 0
         self.node_for_render = render.attachNewNode("node_for_render")
+        self.node_for_render_sentence = render.attachNewNode("node_for_render_sentence")
         self.co_reference_node = self.node_for_render.attachNewNode("co_reference_node")
         self.node_for_sentence = 0
+        self.node_for_sentence_frame = 0
         self.index = 0
 
         self.input_sentence = ''
@@ -158,30 +186,63 @@ class App(ShowBase):
         self.move_camera = False
         self.input_sentence_number = 0
         self.sum_sentiment = 0
+        self.camera_mode = 0
+        self.box_frame = 0
+        self.camera_distance = 50
+        self.camera_z = 8
+
+    def camera_control(self):
+        if self.camera_mode == 0:
+            self.camera_mode = 1
+
+        elif self.camera_mode == 1:
+            self.camera_mode = 0
+    def camera_distance_control_add(self):
+        self.camera_distance+=2
+    def camera_distance_control_minus(self):
+        self.camera_distance-=2
+    def camera_z_control_add(self):
+        if self.keyboard:
+            self.camera_z+=0.5
+    def camera_z_control_minue(self):
+        if self.keyboard:
+            self.camera_z-=0.5
+
+    def box_frame_control(self):
+        if self.keyboard:
+            if self.box_frame == 0:
+                self.box_frame = 1
+                self.node_for_render_sentence.hide()
+            elif self.box_frame == 1:
+                self.box_frame = 0
+                self.node_for_render_sentence.show()
 
 
 
-
-
+        # control the camera movement
     def spinCameraTask(self, task):
         R = 0
         if self.move_camera:
 
-            self.camera.setZ(self.z_origin+8)
-
             angleDegrees = task.time * 6.0
             angleRadians = angleDegrees * (pi / 180.0)
-            # Choice 1: Fully automated camera (moving the image center and rotate)
-            '''
-            self.camera.setPos(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000+50 * sin(angleRadians),
-                               self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/1000-50 * cos(angleRadians),
-                               self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000+8)
-            self.camera.setHpr(angleDegrees, 0, R)
-            '''
-            # Choice 2: Half automated camera (moving the image center)
-            self.camera.lookAt(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000,
-                               self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/1000,
-                               self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000)
+
+            if self.camera_mode == 0:
+                # Choice 1: Fully automated camera (moving the image center and rotate)
+
+                self.camera.setX(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000+self.camera_distance * sin(angleRadians))
+                self.camera.setY(self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/1000-self.camera_distance * cos(angleRadians))
+                self.camera.setZ(self.z_origin+self.camera_z)
+                                   #self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000+8)
+                self.camera.setHpr(angleDegrees, 0, R)
+
+            elif self.camera_mode == 1:
+                # Choice 2: Half automated camera (moving the image center)
+                #self.camera.setZ(self.z_origin+8)
+                self.camera.lookAt(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000,
+                                   self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/1000,
+                                   self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000)
+                R = self.camera.getR()
 
             if self.compute<500:
                 self.compute += 2
@@ -192,11 +253,15 @@ class App(ShowBase):
         return Task.cont
 
     def renderSurface(self):
+        # maybe add color change also
         if self.render_next:
             if self.index<self.count:
                 for node in self.node_dict[self.index]:
                     #node.setMaterial(self.myMaterial)
                     node.reparentTo(self.node_for_sentence)
+                for node in self.node_dict_frame[self.index]:
+                    #node.setMaterial(self.myMaterial)
+                    node.reparentTo(self.node_for_sentence_frame)
                 self.index+=1
             elif self.index==self.count:
                 index_pre = 0
@@ -225,10 +290,14 @@ class App(ShowBase):
                             else:
                                 position_edit = [(position_pre[0] + position_now[0])/2, (position_pre[1] + position_now[1])/2, (position_pre[2] + position_now[2])/2]
                                 self.rendered_connection.append([index_pre,word_connect[0]+str(index)])
+                                test = 0
                                 for i in self.node_for_render.getChildren():
+                                    test+=1
                                     if i.getName() == "node_for_"+str(sentence_index):
                                         new_pos = np.array(sentence_position)-(np.array(position_now)-np.array(position_edit)).tolist()
                                         i.setPos(new_pos[0], new_pos[1], new_pos[2])
+                                        self.node_for_render_sentence.getChild(test-1).setPos(new_pos[0], new_pos[1], new_pos[2])
+                                        print(i,self.node_for_render_sentence.getChild(test-1))
                                         self.store_position.get(word_connect[0]+str(index))["word_position"] = position_edit
                                         self.store_position.get(word_connect[0]+str(index))['sentence_position'] = new_pos
                                         break
@@ -255,8 +324,9 @@ class App(ShowBase):
                 self.index+=1
 
             else:
-                self.warning.setText(self.warningText)
-                print("This sentence is finished. Please input a new one.")
+                if self.keyboard:
+                    self.warning.setText(self.warningText)
+                    print("This sentence is finished. Please input a new one.")
 
 
 
@@ -264,10 +334,13 @@ class App(ShowBase):
     def clearText(self):
         global cube
         self.entry.enterText('')
+        self.keyboard = False
 
     def setText(self, s):
         if 1>0:
+            self
             self.node_for_sentence = self.node_for_render.attachNewNode("node_for_"+str(self.input_sentence_number))
+            self.node_for_sentence_frame = self.node_for_render_sentence.attachNewNode("node_for_"+str(self.input_sentence_number)+"frame")
             self.input_sentence_number += 1
             self.move_camera = False
             self.compute = 0
@@ -276,13 +349,11 @@ class App(ShowBase):
             self.bk_text = s
             self.index = 0
             node_dict = {}
+            node_dict_frame = {}
             # get input sentence
             s_org = s.lower()
             sentence1 = TextBlob(s_org)
             sentence = str(sentence1.correct())
-
-
-
 
             # stop sentence input
             get_input = False
@@ -330,10 +401,10 @@ class App(ShowBase):
             word_list = sentence.split(" ")
             # compute the sentiment value of the given sentence
             sentiment = compute_sent_sentiment(sentence)
+
+            # control the overall sentiment of all the in
             self.sum_sentiment+=sentiment
-
             temperature = 6500-6500*self.sum_sentiment/self.input_sentence_number
-
             self.alnp.node().setColorTemperature(temperature)
 
             # initiate variables
@@ -376,6 +447,7 @@ class App(ShowBase):
                 for word in sub_word_list:
 
                     node_dict[count] = []
+                    node_dict_frame[count] = []
 
 
                     if len(word)==0:
@@ -484,6 +556,9 @@ class App(ShowBase):
                                                                       "input_sentence_index":self.input_sentence_number-1}
                     self.word_index +=1
                     # add the framework structrue
+                    # add a turn-off control here (aug 16)
+
+
 
                     frame1 = self.loader.loadModel("models/box")
 
@@ -493,7 +568,7 @@ class App(ShowBase):
                     frame1.setColorScale(0, 0.1, 0.2,0.6)
                     frame1.setShaderAuto()
 
-                    node_dict[count].append(frame1)
+                    node_dict_frame[count].append(frame1)
 
                     frame2 = self.loader.loadModel("models/box")
                     frame2.setPosHprScale(LVecBase3(x2-x_origin,y2-y_origin,z2-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
@@ -501,77 +576,77 @@ class App(ShowBase):
                     frame2.setTransparency(1)
                     frame2.setColorScale(0, 0.1, 0.2,0.6)
                     frame2.setShaderAuto()
-                    node_dict[count].append(frame2)
+                    node_dict_frame[count].append(frame2)
 
                     frame3 = self.loader.loadModel("models/box")
                     frame3.setPosHprScale(LVecBase3(x_move1-x_origin,y_move1-y_origin,z1-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
                     frame3.setTextureOff(1)
                     frame3.setTransparency(1)
                     frame3.setColorScale(0, 0.1, 0.2,0.6)
-                    node_dict[count].append(frame3)
+                    node_dict_frame[count].append(frame3)
 
                     frame4 = self.loader.loadModel("models/box")
                     frame4.setPosHprScale(LVecBase3(x_move2-x_origin,y_move2-y_origin,z2-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
                     frame4.setTextureOff(1)
                     frame4.setTransparency(1)
                     frame4.setColorScale(0, 0.1, 0.2,0.6)
-                    node_dict[count].append(frame4)
+                    node_dict_frame[count].append(frame4)
 
                     frame5 = self.loader.loadModel("models/box")
                     frame5.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z1-z_origin),LVecBase3(atan2(y_move1-y1, x_move1-x1)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
                     frame5.setTextureOff(1)
                     frame5.setTransparency(1)
                     frame5.setColorScale(0, 0.1, 0.2,0.6)
-                    node_dict[count].append(frame5)
+                    node_dict_frame[count].append(frame5)
 
                     frame6 = self.loader.loadModel("models/box")
                     frame6.setPosHprScale(LVecBase3(x2-x_origin,y2-y_origin,z2-z_origin),LVecBase3(atan2(y_move2-y2, x_move2-x2)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
                     frame6.setTextureOff(1)
                     frame6.setTransparency(1)
                     frame6.setColorScale(0, 0.1, 0.2,0.6)
-                    node_dict[count].append(frame6)
+                    node_dict_frame[count].append(frame6)
 
                     frame7 = self.loader.loadModel("models/box")
                     frame7.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z3-z_origin),LVecBase3(atan2(y_move1-y1, x_move1-x1)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
                     frame7.setTextureOff(1)
                     frame7.setTransparency(1)
                     frame7.setColorScale(0, 0.1, 0.2,0.6)
-                    node_dict[count].append(frame7)
+                    node_dict_frame[count].append(frame7)
 
                     frame8 = self.loader.loadModel("models/box")
                     frame8.setPosHprScale(LVecBase3(x2-x_origin,y2-y_origin,z4-z_origin),LVecBase3(atan2(y_move2-y2, x_move2-x2)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
                     frame8.setTextureOff(1)
                     frame8.setTransparency(1)
                     frame8.setColorScale(0, 0.1, 0.2,0.6)
-                    node_dict[count].append(frame8)
+                    node_dict_frame[count].append(frame8)
 
                     frame9 = self.loader.loadModel("models/box")
                     frame9.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z1-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
                     frame9.setTextureOff(1)
                     frame9.setTransparency(1)
                     frame9.setColorScale(0, 0.1, 0.2,0.6)
-                    node_dict[count].append(frame9)
+                    node_dict_frame[count].append(frame9)
 
                     frame10 = self.loader.loadModel("models/box")
                     frame10.setPosHprScale(LVecBase3(x3-x_origin,y3-y_origin,z3-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
                     frame10.setTextureOff(1)
                     frame10.setTransparency(1)
                     frame10.setColorScale(0, 0.1, 0.2,0.6)
-                    node_dict[count].append(frame10)
+                    node_dict_frame[count].append(frame10)
 
                     frame11 = self.loader.loadModel("models/box")
                     frame11.setPosHprScale(LVecBase3(x_move1-x_origin, y_move1-y_origin, z1-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
                     frame11.setTextureOff(1)
                     frame11.setTransparency(1)
                     frame11.setColorScale(0, 0.1, 0.2,0.6)
-                    node_dict[count].append(frame11)
+                    node_dict_frame[count].append(frame11)
 
                     frame12 = self.loader.loadModel("models/box")
                     frame12.setPosHprScale(LVecBase3(x_move1-x_origin, y_move1-y_origin, z3-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
                     frame12.setTextureOff(1)
                     frame12.setTransparency(1)
                     frame12.setColorScale(0, 0.1, 0.2,0.6)
-                    node_dict[count].append(frame12)
+                    node_dict_frame[count].append(frame12)
 
 
                     self.x_origin +=x1
@@ -743,16 +818,22 @@ class App(ShowBase):
         self.y_origin = self.y_origin/len(word_list)
 
         self.node_for_sentence.setPos(x_origin,y_origin,z_origin)
+        self.node_for_sentence_frame.setPos(x_origin,y_origin,z_origin)
 
 
         self.node_dict = node_dict
+        self.node_dict_frame = node_dict_frame
         self.count = count
         for node in self.node_dict[0]:
-
             node.reparentTo(self.node_for_sentence)
+
+        for node in self.node_dict_frame[0]:
+            node.reparentTo(self.node_for_sentence_frame)
+
         self.index = 1
         self.render_next = True
         self.move_camera = True
+        self.keyboard = True
 
 
 
