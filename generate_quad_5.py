@@ -71,11 +71,12 @@ os.environ["CURL_CA_BUNDLE"]=""
 
 
 class App(ShowBase):
+    # set up text instruction
     def makeStatusLabel(self, text,i):
         return OnscreenText(text=text,
             parent=base.a2dTopLeft, align=TextNode.ALeft,
             style=1, fg=(1, 1, 0, 1), shadow=(0, 0, 0, .4),
-            pos=(0.06, -0.4-(.06 * i)), scale=.05, mayChange=True)
+            pos=(0.06, -0.4-(.06 * i)), scale=.05, mayChange=True, font =  self.loader.loadFont('font/Arial.ttf'))
 
 
     def __init__(self):
@@ -98,14 +99,14 @@ class App(ShowBase):
         self.warningText = "Finish! Please input a new one."
 
 
-        self.instructionText = self.makeStatusLabel("Press ESC to quit the program",1.5)
-        self.instructionText1 = self.makeStatusLabel("Press R to render the next stucture",3)
-        self.instructionText2 = self.makeStatusLabel("Press C to switch the camera mode",4.5)
-        self.instructionText3 = self.makeStatusLabel("Press B to turn on and off the frames",6)
-        self.instructionText4 = self.makeStatusLabel("Press Up and Down to control the camera",7.5)
-        self.instructionText4_ = self.makeStatusLabel("distance in the automated mode",8.5)
-        self.instructionText5 = self.makeStatusLabel("Press W and S to control the z-position of",10)
-        self.instructionText5_ = self.makeStatusLabel("the camera in the automated mode",11)
+        self.instructionText = self.makeStatusLabel("ESC: quit",1.5)
+        self.instructionText1 = self.makeStatusLabel("R: render next image",3)
+        self.instructionText2 = self.makeStatusLabel("C: activate animation",4.5)
+        self.instructionText3 = self.makeStatusLabel("B: remove frames",6)
+        self.instructionText4 = self.makeStatusLabel("UP/DOWN: camera distance",7.5)
+        self.instructionText5 = self.makeStatusLabel("PW/S: control camera's Z position",9)
+        self.instructionText6 = self.makeStatusLabel("I: hide all instructions",10.5)
+
 
         #add text entry
         self.warning = self.makeStatusLabel(" ",0)
@@ -148,8 +149,9 @@ class App(ShowBase):
         self.accept("b", self.box_frame_control)
         self.accept("arrow_up", self.camera_distance_control_add)
         self.accept("arrow_down", self.camera_distance_control_minus)
-        self.accept("w", self.camera_z_control_add)
-        self.accept("s", self.camera_z_control_minue)
+        self.accept("w", self.camera_z_control_minus)
+        self.accept("s", self.camera_z_control_add)
+        self.accept("i", self.hide_instruction)
 
 
         self.node_dict = {}
@@ -190,6 +192,8 @@ class App(ShowBase):
         self.box_frame = 0
         self.camera_distance = 50
         self.camera_z = 8
+        self.hide_instruction = 1
+        #self.instruction_font = self.loader.loadFont('arial.egg')
 
     def camera_control(self):
         if self.camera_mode == 0:
@@ -204,9 +208,33 @@ class App(ShowBase):
     def camera_z_control_add(self):
         if self.keyboard:
             self.camera_z+=0.5
-    def camera_z_control_minue(self):
+    def camera_z_control_minus(self):
         if self.keyboard:
             self.camera_z-=0.5
+    def hide_instruction(self):
+        if self.keyboard:
+            if self.hide_instruction == 1:
+                self.hide_instruction = 0
+                self.instructionText.show()
+                self.instructionText1.show()
+                self.instructionText2.show()
+                self.instructionText3.show()
+                self.instructionText4.show()
+                self.instructionText5.show()
+                self.instructionText6.show()
+                self.warning.show()
+                self.entry.show()
+            elif self.hide_instruction == 0:
+                self.hide_instruction = 1
+                self.instructionText.hide()
+                self.instructionText1.hide()
+                self.instructionText2.hide()
+                self.instructionText3.hide()
+                self.instructionText4.hide()
+                self.instructionText5.hide()
+                self.instructionText6.hide()
+                self.warning.hide()
+                self.entry.hide()
 
     def box_frame_control(self):
         if self.keyboard:
