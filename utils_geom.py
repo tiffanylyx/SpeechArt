@@ -6,6 +6,8 @@ import random
 
 from math import sqrt
 
+import time
+
 
 
 
@@ -57,6 +59,7 @@ def keep_real(a):
     return a
 
 def solve_start_position(x_old, y_old, z_old, distance, nx_s, ny_s, nz_s):
+    time1 = time.time()
 
     x = Symbol('x')
     y = Symbol('y')
@@ -66,6 +69,8 @@ def solve_start_position(x_old, y_old, z_old, distance, nx_s, ny_s, nz_s):
     r_x = keep_real(solved_value2[x])
     r_y = keep_real(solved_value2[y])
     r_z = keep_real(solved_value2[z])
+    time2 = time.time()
+    print("solve_start_position", time2-time1)
 
     return [r_x, r_y, r_z]
 def solve_point_on_vector(x1, y1, z1, distance, vx, vy, vz):
@@ -156,42 +161,11 @@ def choose_point_on_two_point(p1, p2, distance):
 
 
 def choice_random_point_on_line(p1, p2):
+    offset = random.random()
 
+    r_x = p1[0]+offset*(p2[0]-p1[0])
+    r_y = p1[1]+offset*(p2[1]-p1[1])
+    r_z = p1[2]+offset*(p2[2]-p1[2])
 
-    x = Symbol('x')
-    y = Symbol('y')
-    z = Symbol('z')
-
-    line = sqrt((p1[0]-p2[0])**2+(p1[1]-p2[1])**2+(p1[2]-p2[2])**2)
-
-    distance = random.random()*line
-    if (p1[2]!=p2[2]):
-
-        solved_value =solve([(x-p1[0])**2 + (y-p1[1])**2 +(z-p1[2])**2 - distance**2,(x-p1[0])*(p2[1]-p1[1])-(y-p1[1])*(p2[0]-p1[0]),(x-p1[0])*(p2[2]-p1[2])-(z-p1[2])*(p2[0]-p1[0])],[x,y,z])
-        if (keep_real(solved_value[0][0])<=max(p1[0], p2[0]))&(keep_real(solved_value[0][0])>=min(p1[0], p2[0])):
-            r_x = keep_real(solved_value[0][0])
-            r_y = keep_real(solved_value[0][1])
-            r_z = keep_real(solved_value[0][2])
-        elif (keep_real(solved_value[1][0])<=max(p1[0], p2[0]))&(keep_real(solved_value[1][0])>=min(p1[0], p2[0])):
-            r_x = keep_real(solved_value[1][0])
-            r_y = keep_real(solved_value[1][1])
-            r_z = keep_real(solved_value[1][2])
-        else:
-            [r_x, r_y, r_z] = random.choice([p1,p2])
-
-
-    elif (p1[2]==p2[2]):
-        #(x-p2[0])**2 + (y-p2[1])**2 +(0-p2[2])**2 - (line-distance)**2,
-        solved_value =solve([(x-p1[0])**2 + (y-p1[1])**2 +(0-p1[2])**2 - distance**2,(x-p1[0])*(p2[1]-p1[1])-(y-p1[1])*(p2[0]-p1[0])],[x,y])
-        if (keep_real(solved_value[0][0])<=max(p1[0], p2[0]))&(keep_real(solved_value[0][0])>=min(p1[0], p2[0])):
-            r_x = keep_real(solved_value[0][0])
-            r_y = keep_real(solved_value[0][1])
-        elif (keep_real(solved_value[1][0])<=max(p1[0], p2[0]))&(keep_real(solved_value[1][0])>=min(p1[0], p2[0])):
-            r_x = keep_real(solved_value[1][0])
-            r_y = keep_real(solved_value[1][1])
-        else:
-            [r_x, r_y, r_z] = random.choice([p1,p2])
-
-        r_z = p2[2]
 
     return [r_x, r_y,r_z]

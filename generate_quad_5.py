@@ -2,6 +2,7 @@
 ## Version 5
 ## created on Aug 5, 2022
 
+## update on Aug 18 : modify keyboard control, add co-occurrence, add moving animation, speed up the code
 ## update on Aug 17 : adding keybaord control, debug
 
 ## update on Aug 16 : adding camera mood, debugging, adding lighting temperature changing, restructure colde
@@ -54,6 +55,7 @@ import colorsys
 import os
 from nltk import *
 from textblob import TextBlob
+from nltk import *
 
 from utils_geom import *
 from utils_nlp import *
@@ -95,6 +97,7 @@ class App(ShowBase):
         self.camLens.setAspectRatio(2)
         self.camLens.setFar(100)
         self.taskMgr.add(self.spinCameraTask, "SpinCameraTask")
+        self.taskMgr.add(self.moving_structure,"Moving Structure")
 
         self.warningText = "Finish! Please input a new one."
 
@@ -168,9 +171,10 @@ class App(ShowBase):
         self.co_reference_node = self.node_for_render.attachNewNode("co_reference_node")
         self.node_for_sentence = 0
         self.node_for_sentence_frame = 0
-        self.index = 0
+        self.render_index = 0
 
         self.input_sentence = ''
+        self.input_sentence_list = []
         self.distance_offset = 0.5
         self.render_next = False
 
@@ -195,12 +199,19 @@ class App(ShowBase):
         self.hide_instruction = 1
         #self.instruction_font = self.loader.loadFont('arial.egg')
 
-    def camera_control(self):
-        if self.camera_mode == 0:
-            self.camera_mode = 1
+        self.moving = False
+        self.compute1 = 0
+        self.move_sentence_index = {}
+        self.co_reference_frame = []
+        self.pos_list = {}
 
-        elif self.camera_mode == 1:
-            self.camera_mode = 0
+    def camera_control(self):
+        if self.keyboard:
+            if self.camera_mode == 0:
+                self.camera_mode = 1
+
+            elif self.camera_mode == 1:
+                self.camera_mode = 0
     def camera_distance_control_add(self):
         self.camera_distance+=2
     def camera_distance_control_minus(self):
@@ -280,78 +291,59 @@ class App(ShowBase):
                 R = self.camera.getR()
         return Task.cont
 
+    def moving_structure(self, Task):
+        if self.moving:
+            if self.compute1<1000:
+                if self.compute1==0:
+                    for index in self.move_sentence_index:
+                        node = self.node_for_render.getChild(index)
+                        [x1, y1, z1] = node.getPos()
+                        self.pos_list[index]=[x1, y1, z1]
+                for index in self.move_sentence_index:
+                    pos  = self.move_sentence_index.get(index)
+                    node = self.node_for_render.getChild(index)
+                    [x1, y1, z1] = self.pos_list.get(index)
+                    node.setPos(x1+(pos[0]-x1)*self.compute1/1000,y1+(pos[1]-y1)*self.compute1/1000, z1+(pos[2]-z1)*self.compute1/1000)
+                    self.node_for_render_sentence.getChild(index).setPos(x1+(pos[0]-x1)*self.compute1/1000,y1+(pos[1]-y1)*self.compute1/1000, z1+(pos[2]-z1)*self.compute1/1000)
+                    if  self.compute1 == 0:
+                        self.x_origin = self.x_origin-(x1-pos[0])
+                        self.y_origin = self.y_origin-(y1-pos[1])
+                        self.z_origin = self.z_origin-(z1-pos[2])
+                self.compute1+=3
+
+            elif self.compute1==1002:
+                print("self.compute1",self.compute1)
+                for i in self.co_reference_frame:
+                    print("i",i)
+                    frame = self.loader.loadModel("models/box")
+                    frame.setPosHprScale(i[0], i[1], i[2])
+                    frame.setTextureOff(1)
+                    frame.setTransparency(1)
+                    frame.setColorScale(1,0,0,1)
+                    frame.reparentTo(self.co_reference_node)
+                self.compute1+=3
+
+
+
+        return Task.cont
+
+
     def renderSurface(self):
         # maybe add color change also
         if self.render_next:
-            if self.index<self.count:
-                for node in self.node_dict[self.index]:
+            if self.render_index<self.count:
+                for node in self.node_dict[self.render_index]:
                     #node.setMaterial(self.myMaterial)
                     node.reparentTo(self.node_for_sentence)
-                for node in self.node_dict_frame[self.index]:
+                for node in self.node_dict_frame[self.render_index]:
                     #node.setMaterial(self.myMaterial)
                     node.reparentTo(self.node_for_sentence_frame)
-                self.index+=1
-            elif self.index==self.count:
-                index_pre = 0
-                self.co_reference_node.removeNode()
-                self.co_reference_node = self.node_for_render.attachNewNode("co_reference_node")
-                for i in self.co_reference:
-                    if len(i)>1:
-                        index = i[0][0]-1
-                        word_connect = word_tokenize(self.input_sentence)[index:index+1]
-                        position_now = self.store_position.get(word_connect[0]+str(index))['word_position']
-                        index_pre = word_connect[0]+str(index)
+                self.render_index+=1
+            elif self.render_index==self.count:
+                self.moving = True
+                self.render_index+=1
+                self.compute1 = 0
 
-                        for j in i[1:]:
-                            index = j[0]-1
-                            word_connect = word_tokenize(self.input_sentence)[index:index+1]
-
-                            position_pre = copy.deepcopy(position_now)
-                            position_now = self.store_position.get(word_connect[0]+str(index))['word_position']
-                            sentence_index = self.store_position.get(word_connect[0]+str(index))['input_sentence_index']
-                            sentence_position = self.store_position.get(word_connect[0]+str(index))['sentence_position']
-
-                            if [index_pre,word_connect[0]+str(index)] in self.rendered_connection:
-
-                                position_edit = copy.deepcopy(position_now)
-
-                            else:
-                                position_edit = [(position_pre[0] + position_now[0])/2, (position_pre[1] + position_now[1])/2, (position_pre[2] + position_now[2])/2]
-                                self.rendered_connection.append([index_pre,word_connect[0]+str(index)])
-                                test = 0
-                                for i in self.node_for_render.getChildren():
-                                    test+=1
-                                    if i.getName() == "node_for_"+str(sentence_index):
-                                        new_pos = np.array(sentence_position)-(np.array(position_now)-np.array(position_edit)).tolist()
-                                        i.setPos(new_pos[0], new_pos[1], new_pos[2])
-                                        self.node_for_render_sentence.getChild(test-1).setPos(new_pos[0], new_pos[1], new_pos[2])
-                                        print(i,self.node_for_render_sentence.getChild(test-1))
-                                        self.store_position.get(word_connect[0]+str(index))["word_position"] = position_edit
-                                        self.store_position.get(word_connect[0]+str(index))['sentence_position'] = new_pos
-                                        break
-
-
-                            frame = self.loader.loadModel("models/box")
-                            frame.setPosHprScale(LVecBase3(position_pre[0],position_pre[1], position_pre[2]),
-                                                     LVecBase3(atan2(position_edit[1]-position_pre[1], position_edit[0]-position_pre[0])* 180.0/np.pi, 0,-atan2(position_edit[2]-position_pre[2], sqrt((position_edit[0]-position_pre[0])**2+(position_edit[1]-position_pre[1])**2))* 180.0/np.pi),
-                                                     LVecBase3(sqrt((position_edit[0]-position_pre[0])**2+(position_edit[1]-position_pre[1])**2+(position_edit[2]-position_pre[2])**2), 0.04, 0.04))
-
-
-
-                            frame.setTextureOff(1)
-                            frame.setTransparency(1)
-                            frame.setColorScale(1,0,0,1)
-                            frame.reparentTo(self.co_reference_node)
-                            self.x_origin_pre = self.x_origin
-                            self.y_origin_pre = self.y_origin
-                            self.z_origin_pre = self.z_origin
-                            self.x_origin = self.x_origin-(position_now[0]-position_edit[0])
-                            self.y_origin = self.y_origin-(position_now[1]-position_edit[1])
-                            self.z_origin = self.z_origin-(position_now[2]-position_edit[2])
-                            self.compute = 0
-                self.index+=1
-
-            else:
                 if self.keyboard:
                     self.warning.setText(self.warningText)
                     print("This sentence is finished. Please input a new one.")
@@ -366,7 +358,7 @@ class App(ShowBase):
 
     def setText(self, s):
         if 1>0:
-            self
+            self.moving = False
             self.node_for_sentence = self.node_for_render.attachNewNode("node_for_"+str(self.input_sentence_number))
             self.node_for_sentence_frame = self.node_for_render_sentence.attachNewNode("node_for_"+str(self.input_sentence_number)+"frame")
             self.input_sentence_number += 1
@@ -375,13 +367,14 @@ class App(ShowBase):
             self.render_next = False
             self.warning.setText('')
             self.bk_text = s
-            self.index = 0
+            self.render_index = 0
+            self.move_sentence_index = {}
+
             node_dict = {}
             node_dict_frame = {}
             # get input sentence
-            s_org = s.lower()
-            sentence1 = TextBlob(s_org)
-            sentence = str(sentence1.correct())
+            sentence = pre_process_sentence(s)
+            print(sentence)
 
             # stop sentence input
             get_input = False
@@ -391,12 +384,11 @@ class App(ShowBase):
             time_period = now_time-self.previous_time
 
             self.input_sentence = self.input_sentence+" " + sentence
+            self.input_sentence_list.append(sentence)
+            #l = compute_co_occurrence(self.input_sentence_list)
+            #print("compute_co_occurrence",l)
 
             self.co_reference = compute_co_reference(self.input_sentence)
-
-            # clean the sentence
-            if sentence[-1]==".":
-                sentence = sentence[:-1]
 
             # compute the 3D sentence vector of the input sentence
             sent_vect = compute_sent_vec(sentence, model_sentence,pca3_sentenceVec)
@@ -421,14 +413,14 @@ class App(ShowBase):
 
             self.z_origin = z_origin
 
-            # compute parts of the speech of the given sentence
-            res_parts = compute_sent_parts(sentence)
 
 
             # seperate the sentence into word list
-            word_list = sentence.split(" ")
+            word_list = nltk.word_tokenize(sentence)
             # compute the sentiment value of the given sentence
             sentiment = compute_sent_sentiment(sentence)
+            # compute parts of the speech of the given sentence
+            res_parts = compute_sent_parts(word_list)
 
             # control the overall sentiment of all the in
             self.sum_sentiment+=sentiment
@@ -480,7 +472,7 @@ class App(ShowBase):
 
                     if len(word)==0:
                         continue
-                    syllables = compute_syllables(word)
+                    syllables = compute_syllables(word,d)
                     # add some randomness
                     #random.shuffle(sub_sent_vect)
                     # compute the 3D word vector
@@ -584,9 +576,6 @@ class App(ShowBase):
                                                                       "input_sentence_index":self.input_sentence_number-1}
                     self.word_index +=1
                     # add the framework structrue
-                    # add a turn-off control here (aug 16)
-
-
 
                     frame1 = self.loader.loadModel("models/box")
 
@@ -852,16 +841,71 @@ class App(ShowBase):
         self.node_dict = node_dict
         self.node_dict_frame = node_dict_frame
         self.count = count
+        index_pre = 0
+        self.co_reference_node.removeNode()
+        self.co_reference_node = self.node_for_render.attachNewNode("co_reference_node")
+        print("self.co_reference",self.co_reference)
+
+        self.co_reference_frame = []
+        for i in self.co_reference:
+            if len(i)>1:
+                index = i[0][0]-1
+                word_connect = word_tokenize(self.input_sentence)[index:index+1]
+                position_now = self.store_position.get(word_connect[0]+str(index))['word_position']
+                index_pre = word_connect[0]+str(index)
+
+                for j in i[1:]:
+                    index = j[0]-1
+                    word_connect = word_tokenize(self.input_sentence)[index:index+1]
+
+                    position_pre = copy.deepcopy(position_now)
+                    position_now = self.store_position.get(word_connect[0]+str(index))['word_position']
+                    sentence_index = self.store_position.get(word_connect[0]+str(index))['input_sentence_index']
+                    sentence_position = self.store_position.get(word_connect[0]+str(index))['sentence_position']
+
+                    if [index_pre,word_connect[0]+str(index)] in self.rendered_connection:
+
+                        position_edit = copy.deepcopy(position_now)
+
+                    else:
+                        position_edit = [(position_pre[0] + position_now[0])/2, (position_pre[1] + position_now[1])/2, (position_pre[2] + position_now[2])/2]
+                        self.rendered_connection.append([index_pre,word_connect[0]+str(index)])
+                        test = 0
+                        for i in self.node_for_render.getChildren():
+                            test+=1
+                            if i.getName() == "node_for_"+str(sentence_index):
+                                new_pos = np.array(sentence_position)-(np.array(position_now)-np.array(position_edit)).tolist()
+                                self.move_sentence_index[sentence_index] = new_pos
+                                #i.setPos(new_pos[0], new_pos[1], new_pos[2])
+                                #self.node_for_render_sentence.getChild(test-1).setPos(new_pos[0], new_pos[1], new_pos[2])
+                                #print(i,self.node_for_render_sentence.getChild(test-1))
+                                self.store_position.get(word_connect[0]+str(index))["word_position"] = position_edit
+                                self.store_position.get(word_connect[0]+str(index))['sentence_position'] = new_pos
+                                break
+
+                    self.co_reference_frame.append([LVecBase3(position_pre[0],position_pre[1], position_pre[2]),
+                                                    LVecBase3(atan2(position_edit[1]-position_pre[1], position_edit[0]-position_pre[0])* 180.0/np.pi, 0,-atan2(position_edit[2]-position_pre[2], sqrt((position_edit[0]-position_pre[0])**2+(position_edit[1]-position_pre[1])**2))* 180.0/np.pi),
+                                                    LVecBase3(sqrt((position_edit[0]-position_pre[0])**2+(position_edit[1]-position_pre[1])**2+(position_edit[2]-position_pre[2])**2), 0.04, 0.04)])
+
+
+
+                    self.compute = 0
+
+
         for node in self.node_dict[0]:
             node.reparentTo(self.node_for_sentence)
 
         for node in self.node_dict_frame[0]:
             node.reparentTo(self.node_for_sentence_frame)
 
-        self.index = 1
+        self.render_index = 1
         self.render_next = True
         self.move_camera = True
         self.keyboard = True
+        self.pos_list = {}
+        print(self.move_sentence_index)
+        print("self.co_reference_frame", self.co_reference_frame)
+
 
 
 

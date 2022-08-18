@@ -29,6 +29,8 @@ from sentence_transformers import SentenceTransformer, LoggingHandler, util, eva
 import os
 import torch
 
+import time
+
 
 model_url = "https://storage.googleapis.com/allennlp-public-models/coref-spanbert-large-2020.02.27.tar.gz"
 predictor = Predictor.from_path(model_url)
@@ -50,16 +52,26 @@ model = Word2Vec.load("model/word2vec_text8.model")
 
 model_sentence = SentenceTransformer('all-MiniLM-L6-v2')
 
-
+def pre_process_sentence(sentence):
+    tokens = nltk.tokenize.word_tokenize(sentence)
+    # lowercase
+    tokens = [token.lower() for token in tokens]
+    # isword
+    tokens = [token for token in tokens if token.isalpha()]
+    clean_sentence = ''
+    clean_sentence = ' '.join(token for token in tokens)
+    sentence1 = TextBlob(clean_sentence)
+    sentence2 = str(sentence1.correct())
+    return sentence2
 def compute_sent_vec(sentence, model,pca3_sentenceVec):
     vector = model.encode(sentence, convert_to_tensor=False)
     res = pca3_sentenceVec.transform([vector])[0]
-    print(res)
+
     normalized_res = res/np.linalg.norm(res)
-    #res = pca3_sentenceVec.transform([vector])
     return normalized_res
 
 def compute_word_vec(word, model, pca2, pca3, pca4, dim):
+    time1 = time.time()
     try:
         vector = model.wv[word]
         if dim==2:
@@ -75,8 +87,7 @@ def compute_word_vec(word, model, pca2, pca3, pca4, dim):
     return normalized_res
 
 def compute_sent_parts(sentence):
-    text = word_tokenize(sentence)
-    res = nltk.pos_tag(text,tagset='universal')
+    res = nltk.pos_tag(sentence,tagset='universal')
     return res
 
 def compute_word_length(word):
@@ -138,7 +149,6 @@ def get_cfg_structure(sent):
     for i in sent:
         if "\""+i+"\"" in CFG_string:
             sent_clean.append(i)
-    print("sent_clean",sent_clean)
 
     parser = nltk.ChartParser(grammar1)
     trees = list(parser.parse(sent_clean))
@@ -169,25 +179,41 @@ def get_cfg_structure(sent):
 
 def compute_co_reference(sentence):
     prediction = predictor.predict(document=sentence)  # get prediction
-
     return prediction['clusters']
 
 from nltk.corpus import cmudict
-
-def compute_syllables(word):
-    d = cmudict.dict()
+d = cmudict.dict()
+def compute_syllables(word,d):
     try:
         res = d[word.lower()]
-        for x in res:
-            count = 0
-            list_res = []
-            for y in x:
-                if y[-1].isdigit():
-                    list_res.append(count)
-                    count+=1
-                else:
-                    count+=len(y)
+        list_res = []
+        for y in res[0]:
+            if y[-1].isdigit():
+                list_res.append(count)
+
     except:
         list_res = [word]
-
     return list_res
+# sklearn countvectorizer
+'''
+from sklearn.feature_extraction.text import CountVectorizer
+import networkx as nx
+# Convert a collection of text documents to a matrix of token counts
+cv = CountVectorizer(stop_words = 'english')
+def compute_co_occurrence(sentence_list):
+
+
+    # matrix of token counts
+    X = cv.fit_transform(sentence_list)
+
+    names = cv.get_feature_names_out()
+    edgelist = []
+    for index_row, row in enumerate(X.toarray()):
+        for index,word in enumerate(row):
+            if word>0:
+                edgelist.append((names[index_row],names[index],word))
+    DG = nx.DiGraph()
+    DG.add_weighted_edges_from(edgelist)
+    l=nx.spring_layout(DG,dim=3,scale = 3)
+    return l
+'''
