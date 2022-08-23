@@ -195,25 +195,27 @@ def compute_syllables(word,d):
         list_res = [word]
     return list_res
 # sklearn countvectorizer
-'''
+
 from sklearn.feature_extraction.text import CountVectorizer
 import networkx as nx
+
+
 # Convert a collection of text documents to a matrix of token counts
-cv = CountVectorizer(stop_words = 'english')
-def compute_co_occurrence(sentence_list):
-
-
-    # matrix of token counts
+# look into the network
+cv = CountVectorizer()
+def compute_co_occurrence(sentence_list,scale):
     X = cv.fit_transform(sentence_list)
-
+    Xc = (X.T * X)
     names = cv.get_feature_names_out()
     edgelist = []
-    for index_row, row in enumerate(X.toarray()):
+    for index_row, row in enumerate(Xc.toarray()):
         for index,word in enumerate(row):
-            if word>0:
-                edgelist.append((names[index_row],names[index],word))
+            if index>index_row:
+                if word>0:
+                    edgelist.append((names[index_row],names[index],word))
     DG = nx.DiGraph()
     DG.add_weighted_edges_from(edgelist)
-    l=nx.spring_layout(DG,dim=3,scale = 3)
-    return l
-'''
+    print(DG)
+    l = nx.spring_layout(DG, dim = 2, scale = scale, seed = 1024)
+    #print(edgelist)
+    return edgelist,l

@@ -2,6 +2,7 @@
 ## Version 5
 ## created on Aug 5, 2022
 
+## update on Aug 19 : add co-occurrence, explore mateiral, debug
 ## update on Aug 18 : modify keyboard control, add co-occurrence, add moving animation, speed up the code
 ## update on Aug 17 : adding keybaord control, debug
 
@@ -98,6 +99,7 @@ class App(ShowBase):
         self.camLens.setFar(100)
         self.taskMgr.add(self.spinCameraTask, "SpinCameraTask")
         self.taskMgr.add(self.moving_structure,"Moving Structure")
+        self.taskMgr.add(self.change_light_temperature,"Change Light Temperature")
 
         self.warningText = "Finish! Please input a new one."
 
@@ -155,6 +157,7 @@ class App(ShowBase):
         self.accept("w", self.camera_z_control_minus)
         self.accept("s", self.camera_z_control_add)
         self.accept("i", self.hide_instruction)
+        self.accept("t", self.hide_texture)
 
 
         self.node_dict = {}
@@ -175,7 +178,7 @@ class App(ShowBase):
 
         self.input_sentence = ''
         self.input_sentence_list = []
-        self.distance_offset = 0.5
+        self.distance_offset = 0.3
         self.render_next = False
 
         self.store_position = {}
@@ -204,6 +207,24 @@ class App(ShowBase):
         self.move_sentence_index = {}
         self.co_reference_frame = []
         self.pos_list = {}
+
+        self.myMaterial = Material()
+        self.myMaterial.setShininess(100) # Make this material shiny
+        self.myMaterial.setSpecular((1, 1, 1, 1)) # Make this material blue
+
+        self.temperature_previous = 0
+        self.temperature_current = 0
+
+        self.zoom_rate = 1
+        self.co_occurance_edge = []
+        self.node_for_cooccurance = render.attachNewNode("node_for_cooccurance")
+
+
+        self.x_c_img = 0
+        self.y_c_img = 0
+        self.z_c_img = 0
+        self.show_texture = 0
+
 
     def camera_control(self):
         if self.keyboard:
@@ -256,6 +277,14 @@ class App(ShowBase):
                 self.box_frame = 0
                 self.node_for_render_sentence.show()
 
+    def hide_texture(self):
+        if self.keyboard:
+            if self.show_texture == 0:
+                self.show_texture = 1
+                self.node_for_render.setTextureOff(1)
+            elif self.show_texture == 1:
+                self.show_texture = 0
+                self.node_for_render.setTextureOff(0)
 
 
         # control the camera movement
@@ -312,9 +341,7 @@ class App(ShowBase):
                 self.compute1+=3
 
             elif self.compute1==1002:
-                print("self.compute1",self.compute1)
                 for i in self.co_reference_frame:
-                    print("i",i)
                     frame = self.loader.loadModel("models/box")
                     frame.setPosHprScale(i[0], i[1], i[2])
                     frame.setTextureOff(1)
@@ -322,23 +349,76 @@ class App(ShowBase):
                     frame.setColorScale(1,0,0,1)
                     frame.reparentTo(self.co_reference_node)
                 self.compute1+=3
+                self.moving = False
+                '''
+                for pair in self.co_occurance_edge:
+                    node1 = pair[0]
+                    node2 = pair[1]
+                    weight = pair[2]
+                    node1_pos = []
+                    node2_pos = []
+                    for framework in self.store_position:
+                        if node1==''.join([i for i in framework if not i.isdigit()]):
+                            node1_pos.append(self.store_position.get(framework))
+                        elif node2==''.join([i for i in framework if not i.isdigit()]):
+                            node2_pos.append(self.store_position.get(framework))
+                    print("node_connection",node1, node2,node1_pos,node2_pos  )
+                    for i in node1_pos:
+                        [x1,y1,z1,x2,y2,z2,x3,y3,z3,x4,y4,z4] = i['word_position']
+                        for j in node2_pos:
+                            [x1_1,y1_1,z1_1,x2_1,y2_1,z2_1,x3_1,y3_1,z3_1,x4_1,y4_1,z4_1] = j['word_position']
+                            frame9 = self.loader.loadModel("models/box")
+                            frame9.setPosHprScale(LVecBase3((x1+x1_1)/2,(y1+y1_1)/2,(z1+z1_1)/2),LVecBase3(0,0,0),LVecBase3(2,2,2))
+                            frame9.reparentTo(self.co_reference_node)
 
+                            frame9 = self.loader.loadModel("models/box")
+                            frame9.setPosHprScale(LVecBase3(x1,y1,z1),LVecBase3(atan2(y1_1-y1, x1_1-x1)* 180.0/np.pi, 0,-atan2(z1_1-z1, sqrt((x1_1-x1)**2+(y1_1-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x1_1-x1)**2+(y1_1-y1)**2+(z1_1-z1)**2), 0.04, 0.04))
+                            frame9.setTextureOff(1)
+                            frame9.setTransparency(1)
+                            frame9.setColorScale(0,1,0,0.9)
+                            frame9.reparentTo(self.co_reference_node)
+
+                            frame10 = self.loader.loadModel("models/box")
+                            frame10.setPosHprScale(LVecBase3(x2,y2,z2),LVecBase3(atan2(y2_1-y2, x2_1-x2)* 180.0/np.pi, 0,-atan2(z2_1-z2, sqrt((x2_1-x2)**2+(y2_1-y2)**2))* 180.0/np.pi),LVecBase3(sqrt((x2_1-x2)**2+(y2_1-y2)**2+(z2_1-z2)**2), 0.04, 0.04))
+                            frame10.setTextureOff(1)
+                            frame10.setTransparency(1)
+                            frame10.setColorScale(0,1,0,0.9)
+                            frame10.reparentTo(self.co_reference_node)
+
+                            frame11 = self.loader.loadModel("models/box")
+                            frame11.setPosHprScale(LVecBase3(x3,y3,z3),LVecBase3(atan2(y3_1-y3, x3_1-x3)* 180.0/np.pi, 0,-atan2(z3_1-z3, sqrt((x3_1-x3)**2+(y3_1-y3)**2))* 180.0/np.pi),LVecBase3(sqrt((x3_1-x3)**2+(y3_1-y3)**2+(z3_1-z3)**2), 0.04, 0.04))
+                            frame11.setTextureOff(1)
+                            frame11.setTransparency(1)
+                            frame11.setColorScale(0,1,0,0.9)
+                            frame11.reparentTo(self.co_reference_node)
+
+                            frame12 = self.loader.loadModel("models/box")
+                            frame12.setPosHprScale(LVecBase3(x4,y4,z4),LVecBase3(atan2(y4_1-y4, x4_1-x4)* 180.0/np.pi, 0,-atan2(z4_1-z4, sqrt((x4_1-x4)**2+(y4_1-y4)**2))* 180.0/np.pi),LVecBase3(sqrt((x4_1-x4)**2+(y4_1-y4)**2+(z4_1-z4)**2), 0.04, 0.04))
+                            frame12.setTextureOff(1)
+                            frame12.setTransparency(1)
+                            frame12.setColorScale(0,1,0,0.9)
+                            frame12.reparentTo(self.co_reference_node)
+                '''
 
 
         return Task.cont
-
+    def change_light_temperature(self, Task):
+        if self.move_camera:
+            self.alnp.node().setColorTemperature(self.temperature_previous + (self.temperature_current-self.temperature_previous)*self.compute/1000)
+        return Task.cont
 
     def renderSurface(self):
         # maybe add color change also
         if self.render_next:
             if self.render_index<self.count:
                 for node in self.node_dict[self.render_index]:
-                    #node.setMaterial(self.myMaterial)
+                    node.setMaterial(self.myMaterial,1)
                     node.reparentTo(self.node_for_sentence)
                 for node in self.node_dict_frame[self.render_index]:
-                    #node.setMaterial(self.myMaterial)
+                    node.setMaterial(self.myMaterial,1)
                     node.reparentTo(self.node_for_sentence_frame)
                 self.render_index+=1
+
             elif self.render_index==self.count:
                 self.moving = True
                 self.render_index+=1
@@ -358,7 +438,7 @@ class App(ShowBase):
 
     def setText(self, s):
         if 1>0:
-            self.moving = False
+            self.zoom_rate = 1+random.random()
             self.node_for_sentence = self.node_for_render.attachNewNode("node_for_"+str(self.input_sentence_number))
             self.node_for_sentence_frame = self.node_for_render_sentence.attachNewNode("node_for_"+str(self.input_sentence_number)+"frame")
             self.input_sentence_number += 1
@@ -385,32 +465,28 @@ class App(ShowBase):
 
             self.input_sentence = self.input_sentence+" " + sentence
             self.input_sentence_list.append(sentence)
-            #l = compute_co_occurrence(self.input_sentence_list)
-            #print("compute_co_occurrence",l)
+
 
             self.co_reference = compute_co_reference(self.input_sentence)
 
             # compute the 3D sentence vector of the input sentence
             sent_vect = compute_sent_vec(sentence, model_sentence,pca3_sentenceVec)
 
-            # add some randomness
-            i0 = 1#random.choice((1,-1))#test_positive(sent_vect[0])
-            i1 = 1#random.choice((1,-1))#test_positive(sent_vect[1])
-            i2 = 1#random.choice((1,-1))#test_positive(sent_vect[2])
 
             self.x_origin_pre = copy.deepcopy(self.x_origin)
             self.y_origin_pre = copy.deepcopy(self.y_origin)
             self.z_origin_pre = copy.deepcopy(self.z_origin)
 
             # compute the starting position of the new structure
-            [x_origin, y_origin,z_origin] = solve_point_on_vector(0,0,0, time_period*self.distance_offset, i0*sent_vect[0],i1*sent_vect[1], i2*sent_vect[2])
+            [x_origin, y_origin,z_origin] = solve_point_on_vector(0,0,0, time_period*self.distance_offset, sent_vect[0],sent_vect[1], sent_vect[2])
             self.x_origin = x_origin
             self.y_origin = y_origin
+            '''
             if z_origin>5:
                 z_origin = 5
             elif z_origin<-5:
                 z_origin = -5
-
+            '''
             self.z_origin = z_origin
 
 
@@ -422,10 +498,15 @@ class App(ShowBase):
             # compute parts of the speech of the given sentence
             res_parts = compute_sent_parts(word_list)
 
+            self.temperature_previous = self.temperature_current
+
             # control the overall sentiment of all the in
             self.sum_sentiment+=sentiment
-            temperature = 6500-6500*self.sum_sentiment/self.input_sentence_number
-            self.alnp.node().setColorTemperature(temperature)
+            self.temperature_current = 6500-6500*self.sum_sentiment/self.input_sentence_number
+            if self.input_sentence_number==1:
+                self.temperature_previous = self.temperature_current
+
+
 
             # initiate variables
             x_center = 0
@@ -457,8 +538,14 @@ class App(ShowBase):
 
             # process the subsentence (NP and VP)
             for sub_sentence in sub_sentences:
+
+                # add some randomness
+                i0 = random.choice((1,-1))#test_positive(sent_vect[0])
+                i1 = random.choice((1,-1))#test_positive(sent_vect[1])
+                i2 = random.choice((1,-1))#test_positive(sent_vect[2])
                 # compute the sentence vector of the sub sentence
                 sub_sent_vect = compute_sent_vec(sub_sentence, model_sentence,pca3_sentenceVec)
+                print("sentence vector", sub_sent_vect)
                 sub_word_list = sub_sentence.split(' ')
                 # compute the starting point based on the origin position, the length of the sub sentence and the sub sentence vector.
                 [x_old_1, y_old_1,z_old_1] = solve_point_on_vector(x_origin, y_origin,z_origin, len(sub_word_list), i0*sub_sent_vect[0], i1*sub_sent_vect[1], i2*sub_sent_vect[2])
@@ -478,7 +565,7 @@ class App(ShowBase):
                     # compute the 3D word vector
                     [nx, ny, nz] = compute_word_vec(word, model, pca2, pca3, pca4, 3)
                     # compute the word length
-                    w = int(max(3,1.5*compute_word_length(word)))
+                    w = int(max(3,1.5*compute_word_length(word))*self.zoom_rate)
                     # add some +/- variance
                     i0 = test_positive(nx)
                     i1 = test_positive(ny)
@@ -493,7 +580,7 @@ class App(ShowBase):
                     z1 = z_old_1
 
                     # use the word-level to determine the framework's height
-                    distance = 4*max(res_key.get(word, [0.5]))
+                    distance = 4*max(res_key.get(word, [0.5]))*self.zoom_rate
                     # add some random offset
                     offset = distance*(0.4*random.random()-0.2)
 
@@ -571,7 +658,7 @@ class App(ShowBase):
 
                     #frameTexture = loader.loadTexture("texture/"+"black_background.png")
 
-                    self.store_position[word+str(self.word_index)] = {"word_position":[x1,y1,z1],
+                    self.store_position[word+str(self.word_index)] = {"word_position":[x1,y1,z1,x2,y2,z2,x3,y3,z3,x4,y4,z4],
                                                                       "sentence_position":[x_origin, y_origin, z_origin],
                                                                       "input_sentence_index":self.input_sentence_number-1}
                     self.word_index +=1
@@ -582,7 +669,7 @@ class App(ShowBase):
                     frame1.setTextureOff(1)
                     frame1.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z1-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
                     frame1.setTransparency(1)
-                    frame1.setColorScale(0, 0.1, 0.2,0.6)
+                    frame1.setColorScale(0, 0.1, 0.2,0.9)
                     frame1.setShaderAuto()
 
                     node_dict_frame[count].append(frame1)
@@ -591,7 +678,7 @@ class App(ShowBase):
                     frame2.setPosHprScale(LVecBase3(x2-x_origin,y2-y_origin,z2-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
                     frame2.setTextureOff(1)
                     frame2.setTransparency(1)
-                    frame2.setColorScale(0, 0.1, 0.2,0.6)
+                    frame2.setColorScale(0, 0.1, 0.2,0.9)
                     frame2.setShaderAuto()
                     node_dict_frame[count].append(frame2)
 
@@ -599,28 +686,28 @@ class App(ShowBase):
                     frame3.setPosHprScale(LVecBase3(x_move1-x_origin,y_move1-y_origin,z1-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
                     frame3.setTextureOff(1)
                     frame3.setTransparency(1)
-                    frame3.setColorScale(0, 0.1, 0.2,0.6)
+                    frame3.setColorScale(0, 0.1, 0.2,0.9)
                     node_dict_frame[count].append(frame3)
 
                     frame4 = self.loader.loadModel("models/box")
                     frame4.setPosHprScale(LVecBase3(x_move2-x_origin,y_move2-y_origin,z2-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
                     frame4.setTextureOff(1)
                     frame4.setTransparency(1)
-                    frame4.setColorScale(0, 0.1, 0.2,0.6)
+                    frame4.setColorScale(0, 0.1, 0.2,0.9)
                     node_dict_frame[count].append(frame4)
 
                     frame5 = self.loader.loadModel("models/box")
                     frame5.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z1-z_origin),LVecBase3(atan2(y_move1-y1, x_move1-x1)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
                     frame5.setTextureOff(1)
                     frame5.setTransparency(1)
-                    frame5.setColorScale(0, 0.1, 0.2,0.6)
+                    frame5.setColorScale(0, 0.1, 0.2,0.9)
                     node_dict_frame[count].append(frame5)
 
                     frame6 = self.loader.loadModel("models/box")
                     frame6.setPosHprScale(LVecBase3(x2-x_origin,y2-y_origin,z2-z_origin),LVecBase3(atan2(y_move2-y2, x_move2-x2)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
                     frame6.setTextureOff(1)
                     frame6.setTransparency(1)
-                    frame6.setColorScale(0, 0.1, 0.2,0.6)
+                    frame6.setColorScale(0, 0.1, 0.2,0.9)
                     node_dict_frame[count].append(frame6)
 
                     frame7 = self.loader.loadModel("models/box")
@@ -634,35 +721,35 @@ class App(ShowBase):
                     frame8.setPosHprScale(LVecBase3(x2-x_origin,y2-y_origin,z4-z_origin),LVecBase3(atan2(y_move2-y2, x_move2-x2)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
                     frame8.setTextureOff(1)
                     frame8.setTransparency(1)
-                    frame8.setColorScale(0, 0.1, 0.2,0.6)
+                    frame8.setColorScale(0, 0.1, 0.2,0.9)
                     node_dict_frame[count].append(frame8)
 
                     frame9 = self.loader.loadModel("models/box")
                     frame9.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z1-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
                     frame9.setTextureOff(1)
                     frame9.setTransparency(1)
-                    frame9.setColorScale(0, 0.1, 0.2,0.6)
+                    frame9.setColorScale(0, 0.1, 0.2,0.9)
                     node_dict_frame[count].append(frame9)
 
                     frame10 = self.loader.loadModel("models/box")
                     frame10.setPosHprScale(LVecBase3(x3-x_origin,y3-y_origin,z3-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
                     frame10.setTextureOff(1)
                     frame10.setTransparency(1)
-                    frame10.setColorScale(0, 0.1, 0.2,0.6)
+                    frame10.setColorScale(0, 0.1, 0.2,0.9)
                     node_dict_frame[count].append(frame10)
 
                     frame11 = self.loader.loadModel("models/box")
                     frame11.setPosHprScale(LVecBase3(x_move1-x_origin, y_move1-y_origin, z1-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
                     frame11.setTextureOff(1)
                     frame11.setTransparency(1)
-                    frame11.setColorScale(0, 0.1, 0.2,0.6)
+                    frame11.setColorScale(0, 0.1, 0.2,0.9)
                     node_dict_frame[count].append(frame11)
 
                     frame12 = self.loader.loadModel("models/box")
                     frame12.setPosHprScale(LVecBase3(x_move1-x_origin, y_move1-y_origin, z3-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
                     frame12.setTextureOff(1)
                     frame12.setTransparency(1)
-                    frame12.setColorScale(0, 0.1, 0.2,0.6)
+                    frame12.setColorScale(0, 0.1, 0.2,0.9)
                     node_dict_frame[count].append(frame12)
 
 
@@ -695,7 +782,7 @@ class App(ShowBase):
                     if res_parts[count][1] == 'NOUN':
 
                         # draw the front surface
-                        square_f = makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, [1,1,1,1],[x_origin,y_origin,z_origin])
+                        square_f = makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, test_color,[x_origin,y_origin,z_origin],1)
                         # store the surface
                         snode = GeomNode('square_f')
                         snode.addGeom(square_f)
@@ -713,10 +800,11 @@ class App(ShowBase):
                         node_f.setColorScale(1,1,1,1)
                         node_f.setTwoSided(True)
                         node_f.setTexture(testTexture)
+                        node_f.setMaterial(self.myMaterial)
                         node_f.setShaderAuto()
                         node_dict[count].append(node_f)
                         # compute the back surface of the framework
-                        square_b = makeQuad(x_move1, y_move1, z1, x_move2, y_move2, z2, x_move1, y_move1, z3, x_move2, y_move2, z4, [1,1,1,1],[x_origin,y_origin,z_origin])
+                        square_b = makeQuad(x_move1, y_move1, z1, x_move2, y_move2, z2, x_move1, y_move1, z3, x_move2, y_move2, z4, test_color,[x_origin,y_origin,z_origin],1)
 
                         snode = GeomNode('square_b')
                         snode.addGeom(square_b)
@@ -728,6 +816,7 @@ class App(ShowBase):
                         node_b.setColorScale(1,1,1,1)
                         node_b.setTwoSided(True)
                         node_b.setTexture(testTexture)
+                        node_b.setMaterial(self.myMaterial)
                         node_dict[count].append(node_b)
 
                     # if the word is a verb, draw the horizontal surfaces of the frame
@@ -740,7 +829,7 @@ class App(ShowBase):
                         testTexture = loader.loadTexture("texture/"+word+".png")
 
                         # draw the bottom surface of the framework
-                        square_bottom = makeQuad(x1, y1, z1, x2, y2, z2, x_move1, y_move1, z1, x_move2, y_move2, z2, [1,1,1,1],[x_origin,y_origin,z_origin])
+                        square_bottom = makeQuad(x1, y1, z1, x2, y2, z2, x_move1, y_move1, z1, x_move2, y_move2, z2, test_color,[x_origin,y_origin,z_origin],1)
                         snode = GeomNode('square_bottom')
                         snode.addGeom(square_bottom)
                         node_bottom = NodePath(snode)
@@ -751,10 +840,11 @@ class App(ShowBase):
                         node_bottom.setColorScale(1,1,1,1)
                         node_bottom.setTwoSided(True)
                         node_bottom.setTexture(testTexture)
+                        node_bottom.setMaterial(self.myMaterial)
                         node_dict[count].append(node_bottom)
 
                         # draw the top surface of the framework
-                        square_up = makeQuad(x1, y1, z3, x2, y2, z4, x_move1, y_move1, z3, x_move2, y_move2, z4, [1,1,1,1],[x_origin,y_origin,z_origin])
+                        square_up = makeQuad(x1, y1, z3, x2, y2, z4, x_move1, y_move1, z3, x_move2, y_move2, z4, test_color,[x_origin,y_origin,z_origin],1)
                         snode = GeomNode('square_up')
                         snode.addGeom(square_up)
                         node_up = NodePath(snode)
@@ -765,6 +855,7 @@ class App(ShowBase):
                         node_up.setColorScale(1,1,1,1)
                         node_up.setTwoSided(True)
                         node_up.setTexture(testTexture)
+                        node_up.setMaterial(self.myMaterial)
                         node_dict[count].append(node_up)
 
                     # store the 8 points of the framework
@@ -818,16 +909,18 @@ class App(ShowBase):
 
 
                         # draw the surface based on the computed color
-                        square_in = makeQuad(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2], p3[0], p3[1], p3[2], p4[0], p4[1], p4[2],color_all,[x_origin,y_origin,z_origin])
+                        square_in = makeQuad(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2], p3[0], p3[1], p3[2], p4[0], p4[1], p4[2],color_all,[x_origin,y_origin,z_origin],0)
 
                         snode.addGeom(square_in)
 
                     node_in = NodePath(snode)
+
                     # set the alpha channel based on the word vector
                     node_in.setTransparency(1)
                     howOpaque=0.5+abs(color_value[2])*0.5
                     node_in.setColorScale(1,1,1,howOpaque)
                     node_in.setTwoSided(True)
+                    node_in.setMaterial(self.myMaterial)
                     node_dict[count].append(node_in)
                     count+=1
 
@@ -844,14 +937,13 @@ class App(ShowBase):
         index_pre = 0
         self.co_reference_node.removeNode()
         self.co_reference_node = self.node_for_render.attachNewNode("co_reference_node")
-        print("self.co_reference",self.co_reference)
 
         self.co_reference_frame = []
         for i in self.co_reference:
             if len(i)>1:
                 index = i[0][0]-1
                 word_connect = word_tokenize(self.input_sentence)[index:index+1]
-                position_now = self.store_position.get(word_connect[0]+str(index))['word_position']
+                position_now = self.store_position.get(word_connect[0]+str(index))['word_position'][:3]
                 index_pre = word_connect[0]+str(index)
 
                 for j in i[1:]:
@@ -859,7 +951,7 @@ class App(ShowBase):
                     word_connect = word_tokenize(self.input_sentence)[index:index+1]
 
                     position_pre = copy.deepcopy(position_now)
-                    position_now = self.store_position.get(word_connect[0]+str(index))['word_position']
+                    position_now = self.store_position.get(word_connect[0]+str(index))['word_position'][:3]
                     sentence_index = self.store_position.get(word_connect[0]+str(index))['input_sentence_index']
                     sentence_position = self.store_position.get(word_connect[0]+str(index))['sentence_position']
 
@@ -879,7 +971,19 @@ class App(ShowBase):
                                 #i.setPos(new_pos[0], new_pos[1], new_pos[2])
                                 #self.node_for_render_sentence.getChild(test-1).setPos(new_pos[0], new_pos[1], new_pos[2])
                                 #print(i,self.node_for_render_sentence.getChild(test-1))
-                                self.store_position.get(word_connect[0]+str(index))["word_position"] = position_edit
+                                [x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4] = self.store_position.get(word_connect[0]+str(index))["word_position"]
+                                x2_1 = x2 + position_edit[0]-x1
+                                x3_1 = x3 + position_edit[0]-x1
+                                x4_1 = x4 + position_edit[0]-x1
+
+                                y2_1 = y2 + position_edit[0]-y1
+                                y3_1 = y3 + position_edit[0]-y1
+                                y4_1 = y4 + position_edit[0]-y1
+
+                                z2_1 = z2 + position_edit[0]-z1
+                                z3_1 = z3 + position_edit[0]-z1
+                                z4_1 = z4 + position_edit[0]-z1
+                                self.store_position.get(word_connect[0]+str(index))["word_position"] = [position_edit[0],position_edit[1],position_edit[2],x2_1, y2_1, z2_1, x3_1, y3_1, z3_1, x4_1, y4_1, z4_1]
                                 self.store_position.get(word_connect[0]+str(index))['sentence_position'] = new_pos
                                 break
 
@@ -888,14 +992,73 @@ class App(ShowBase):
                                                     LVecBase3(sqrt((position_edit[0]-position_pre[0])**2+(position_edit[1]-position_pre[1])**2+(position_edit[2]-position_pre[2])**2), 0.04, 0.04)])
 
 
+        self.co_occurance_edge, self.layout = compute_co_occurrence(self.input_sentence_list,2*len(self.input_sentence.split(" ")))
+        print("self.layout", self.layout)
+        self.node_for_cooccurance.removeNode()
+        self.node_for_cooccurance = render.attachNewNode("node_for_cooccurance")
 
-                    self.compute = 0
+        x_c = 0
+        y_c = 0
+        z_c = 0
+        count = 0
+        for i in self.layout:
+            pos = self.layout.get(i)
+            x_c = x_c + pos[0]
+            y_c = y_c + pos[1]
+            #z_c = z_c + pos[2]
+            z_c = 0
+            count+=1
+
+        x_c = x_c / count
+        y_c = y_c / count
+        z_c = z_c / count
+
+        self.x_c_img = (self.x_c_img*(self.input_sentence_number-1) + self.x_origin)/self.input_sentence_number
+        self.y_c_img = (self.y_c_img*(self.input_sentence_number-1) + self.y_origin)/self.input_sentence_number
+        self.z_c_img = (self.z_c_img*(self.input_sentence_number-1) + self.z_origin)/self.input_sentence_number
+
+        x_offset = -self.x_c_img + x_c
+        y_offset = -self.y_c_img + y_c
+        z_offset = -self.z_c_img + z_c
+
+
+        for i in self.layout:
+            pos = self.layout.get(i)
+            sphere = self.loader.loadModel("models/sphere")
+            sphere.setPos(pos[0]-x_offset, pos[1]-y_offset, 10-z_offset)
+            sphere.setScale(0.4,0.4,0.4)
+            sphere.reparentTo(self.node_for_cooccurance)
+        for edge in self.co_occurance_edge:
+            node1 = edge[0]
+            node2 = edge[1]
+            weight = edge[2]
+            pos1 = self.layout.get(node1)
+            #pos1[2] = z_offset
+            pos2 = self.layout.get(node2)
+            #pos2[2] = z_offset
+            frame12 = self.loader.loadModel("models/box")
+            '''
+            frame12.setPosHprScale(LVecBase3(pos1[0]-x_offset,pos1[1]-y_offset,pos1[2]-z_offset),LVecBase3(atan2(pos2[1]-pos1[1], pos2[0]-pos1[0])* 180.0/np.pi, 0,-atan2(pos2[2]-pos1[2], sqrt((pos2[0]-pos1[0])**2+(pos2[1]-pos1[1])**2))* 180.0/np.pi),
+                                   LVecBase3(sqrt((pos2[0]-pos1[0])**2+(pos2[1]-pos1[1])**2+(pos2[2]-pos1[2])**2), 0.04*weight, 0.04*weight))
+            '''
+            frame12.setPosHprScale(LVecBase3(pos1[0]-x_offset,pos1[1]-y_offset,10-z_offset),LVecBase3(atan2(pos2[1]-pos1[1], pos2[0]-pos1[0])* 180.0/np.pi, 0,-atan2(0, sqrt((pos2[0]-pos1[0])**2+(pos2[1]-pos1[1])**2))* 180.0/np.pi),
+                                   LVecBase3(sqrt((pos2[0]-pos1[0])**2+(pos2[1]-pos1[1])**2), 0.04*weight, 0.04*weight))
+
+            frame12.setTextureOff(1)
+            frame12.setTransparency(1)
+            frame12.setColorScale(0,1,0,0.9)
+            frame12.reparentTo(self.node_for_cooccurance)
+
+
+        self.compute = 0
+
 
 
         for node in self.node_dict[0]:
             node.reparentTo(self.node_for_sentence)
 
         for node in self.node_dict_frame[0]:
+            node.setMaterial(self.myMaterial)
             node.reparentTo(self.node_for_sentence_frame)
 
         self.render_index = 1
@@ -903,8 +1066,6 @@ class App(ShowBase):
         self.move_camera = True
         self.keyboard = True
         self.pos_list = {}
-        print(self.move_sentence_index)
-        print("self.co_reference_frame", self.co_reference_frame)
 
 
 

@@ -16,7 +16,7 @@ def normalized(*args):
 
 
 # generate a surface with given vertexs and color
-def makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, color_value,origin):
+def makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, color_value,origin,mode):
 
     format = GeomVertexFormat.getV3n3c4t2()
     vdata = GeomVertexData('square', format, Geom.UHStatic)
@@ -30,20 +30,26 @@ def makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, color_value,origin)
     vertex.addData3(x3-origin[0], y3-origin[1], z3-origin[2])
     vertex.addData3(x4-origin[0], y4-origin[1], z4-origin[2])
 
-    normal.addData3(normalized(0,0,1))
-    normal.addData3(normalized(0,0,1))
-    normal.addData3(normalized(0,0,1))
-    normal.addData3(normalized(0,0,1))
+    normal.addData3(normalized(2 * x1 - 1, 2 * y1 - 1, 2 * z1 - 1))
+    normal.addData3(normalized(2 * x2 - 1, 2 * y2 - 1, 2 * z2 - 1))
+    normal.addData3(normalized(2 * x3 - 1, 2 * y3 - 1, 2 * z3 - 1))
+    normal.addData3(normalized(2 * x4 - 1, 2 * y4 - 1, 2 * z4 - 1))
+    '''
 
-    if color_value[0]==1:
+    normal.addData3(normalized(0,0,1))
+    normal.addData3(normalized(0,0,1))
+    normal.addData3(normalized(0,0,1))
+    normal.addData3(normalized(0,0,1))
+    '''
 
-        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
-        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
-        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
-        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
-    else:
+    if mode==0:
         for color_v in color_value:
             color.addData4(abs(color_v[0]), abs(color_v[1]), abs(color_v[2]), 1)
+    elif mode==1:
+        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
+        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
+        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
+        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
 
     texcoord.addData2f(0, 0)
     texcoord.addData2f(0, 1)
