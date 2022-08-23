@@ -219,3 +219,18 @@ def compute_co_occurrence(sentence_list,scale):
     l = nx.spring_layout(DG, dim = 2, scale = scale, seed = 1024)
     #print(edgelist)
     return edgelist,l
+
+
+import struct
+import math
+
+
+def rms( data ):
+    count = len(data)/2
+    format = "%dh"%(count)
+    shorts = struct.unpack( format, data )
+    sum_squares = 0.0
+    for sample in shorts:
+        n = sample * (1.0/32768)
+        sum_squares += n*n
+    return math.sqrt( sum_squares / count )
