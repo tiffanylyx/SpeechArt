@@ -1,3 +1,35 @@
+## Speech_Art Version 6
+Update 2022/08/23
+
+### Installation
+
+First, you need to get the latest version of the code using the following command
+```
+git pull
+```
+Then, activate the virtual environment as we did before
+```
+conda activate Speech_Art
+```
+Then, run the following command to install new libraries
+```
+pip install -r requirements.txt
+```
+If there shows errors about tensorflow installation because of the M1 chip, please refer to this [article](https://caffeinedev.medium.com/how-to-install-tensorflow-on-m1-mac-8e9b91d93706)
+
+Install NLTK library
+```
+python install_nltk_file.py
+```
+Then, run the following command to run the program
+```
+python generate_quad6.py
+```
+### Working with the program
+
+When it shows "You can say something" on the screen, you nca start speaking. When your sentence is finished, there will generate structures autometically. You don't need to press "R" to render the next framework.
+
+
 ## Speech_Art Version 5
 Update 2022/08/11
 

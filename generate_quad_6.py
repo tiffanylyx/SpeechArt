@@ -124,6 +124,7 @@ class App(ShowBase):
 
         #add text entry
         self.warning = self.makeStatusLabel(" ",0)
+        self.sayHint = self.makeStatusLabel("You can say something",-1.5)
         '''
         self.entry = DirectEntry(text = "", scale=.05, command=self.inputText, pos=(-1.95, -0.1,0.85),
         initialText="Type Something", numLines = 4, focus=1, focusInCommand=self.clearText,width = 15)
@@ -380,6 +381,7 @@ class App(ShowBase):
                     frame.setColorScale(1,0,0,1)
                     frame.reparentTo(self.co_reference_node)
                 self.compute1+=3
+                self.sayHint.setText("You can say something")
                 self.start_circle = False
 
 
@@ -424,11 +426,10 @@ class App(ShowBase):
     def listenMicTask(self, task):
         if task.time>5:
             while (True)&self.start_circle==False:
-                print("listenMicTask")
+
                 try:
                     # use the microphone as source for input.
                     with sr.Microphone() as source2:
-                        print("in the function")
 
                         # wait for a second to let the recognizer
                         # adjust the energy threshold based on
@@ -465,6 +466,7 @@ class App(ShowBase):
 
     def inputText(self, s):
         if 1>0:
+            self.sayHint.setText(" ")
             self.zoom_rate = 0.5+30*self.input_volume
             print("self.input_volume", self.input_volume)
             self.node_for_sentence = self.node_for_render.attachNewNode("node_for_"+str(self.input_sentence_number))
