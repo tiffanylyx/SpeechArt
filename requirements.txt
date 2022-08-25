@@ -16,3 +16,4 @@ SpeechRecognition
 pyaudio
 crepe
 tensorflow
+colour-science
