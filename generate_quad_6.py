@@ -53,6 +53,8 @@ import os
 from nltk import *
 from textblob import TextBlob
 from nltk import *
+import networkx as nx
+import colour
 
 import speech_recognition as sr
 import struct
@@ -75,6 +77,12 @@ if not os.path.exists('./texture'):
 loadPrcFileData('', 'win-size 1400 700')
 os.environ["CURL_CA_BUNDLE"]=""
 
+load_prc_file_data("", """
+framebuffer-srgb #t
+default-fov 75
+gl-version 3 2
+bounds-type best
+""")
 
 
 
@@ -93,6 +101,7 @@ class App(ShowBase):
         # create a window and set up everything we need for rendering into it.
         ShowBase.__init__(self)
         self.keyboard = False
+        self.shader = Shader.load(Shader.SL_GLSL, "models/lighting.vert", "models/lighting.frag")
 
         # set up basic functions
         self.setBackgroundColor(0.7,0.7,0.7)
@@ -104,7 +113,7 @@ class App(ShowBase):
         self.camLens.setFar(100)
         self.taskMgr.add(self.spinCameraTask, "SpinCameraTask")
         self.taskMgr.add(self.moving_structure,"Moving Structure")
-        self.taskMgr.add(self.change_light_temperature,"Change Light Temperature")
+        #self.taskMgr.add(self.change_light_temperature,"Change Light Temperature")
         self.taskMgr.add(self.listenMicTask,"Listen Mic Task")
         self.taskMgr.add(self.render_next_task, "Render Next Task")
 
@@ -123,39 +132,57 @@ class App(ShowBase):
 
 
         #add text entry
-        self.warning = self.makeStatusLabel(" ",0)
-        self.sayHint = self.makeStatusLabel("You can say something",-1.5)
+        #self.warning = self.makeStatusLabel(" ",0)
+        self.sayHint = self.makeStatusLabel("You can say something",0)
+
         '''
+
         self.entry = DirectEntry(text = "", scale=.05, command=self.inputText, pos=(-1.95, -0.1,0.85),
         initialText="Type Something", numLines = 4, focus=1, focusInCommand=self.clearText,width = 15)
         '''
 
-        # initialize the lighting setup
+
 
         self.alight = AmbientLight('alight')
-        self.alight.setColor((1,1,1,1))
+        self.alight.setColor((0.5,0.5,0.5,1))
+        #self.alight.setColor(VBase4(skycol * 0.04, 1))
         self.alnp = render.attachNewNode(self.alight)
         render.setLight(self.alnp)
-        render.setAntialias(AntialiasAttrib.MAuto)
+
 
 
         self.directionalLight = DirectionalLight('directionalLight')
-        self.directionalLight.setColor((1, 1, 1, 1))
-        self.directionalLight.setShadowCaster(True, 512, 512)
-        self.directionalLightNP = render.attachNewNode(self.directionalLight)
-        # This light is facing forwards, away from the camera.
-        self.directionalLightNP.setHpr(0, -20, 0)
-        render.setLight(self.directionalLightNP)
+        #self.directionalLight.setColor((1, 1, 1, 1))
+        self.directionalLight.setShadowCaster(True, 2048, 2048)
+        self.directionalLight.get_lens().set_near_far(1, 100)
+        self.directionalLight.get_lens().set_film_size(20, 40)
+        #self.directionalLight.show_frustum()
+        self.directionalLight.set_color_temperature(6000)
 
-        self.directionalLight2 = DirectionalLight('directionalLight2')
-        self.directionalLight2.setColor((1, 1, 1, 1))
-        self.directionalLight2.setShadowCaster(True, 512, 512)
-        self.directionalLightNP2 = render.attachNewNode(self.directionalLight2)
+        self.directionalLight.color = self.directionalLight.color * 4
+        self.directionalLightNP = render.attachNewNode(self.directionalLight)
+        self.directionalLightNP.look_at(0, 0, 0)
         # This light is facing forwards, away from the camera.
-        self.directionalLightNP2.setHpr(20, 0, 0)
+        #self.directionalLightNP.setHpr(0, -20, 0)
+        render.setLight(self.directionalLightNP)
+        #self.directionalLightNP.set_shader(self.shader)
+        '''
+        self.directionalLight2 = DirectionalLight('directionalLight2')
+        #self.directionalLight2.setColor((1, 1, 1, 1))
+        self.directionalLight2.setShadowCaster(True, 2048, 2048)
+        self.directionalLight2.get_lens().set_near_far(1, 30)
+        self.directionalLight2.get_lens().set_film_size(20, 40)
+        self.directionalLight2.show_frustum()
+
+        self.directionalLightNP2 = render.attachNewNode(self.directionalLight2)
+        self.directionalLightNP2.look_at(0, 0, 0)
+        #self.directionalLightNP2.set_shader(self.shader)
+        # This light is facing forwards, away from the camera.
+        #self.directionalLightNP2.setHpr(20, 0, 0)
         render.setLight(self.directionalLightNP2)
-        render.setShaderAuto()
+        '''
         render.setAntialias(AntialiasAttrib.MAuto)
+        render.set_shader(self.shader)
 
         # control the event
         self.accept("escape", sys.exit)
@@ -221,9 +248,22 @@ class App(ShowBase):
         self.co_reference_frame = []
         self.pos_list = {}
 
-        self.myMaterial = Material()
-        self.myMaterial.setShininess(100) # Make this material shiny
-        self.myMaterial.setSpecular((1, 1, 1, 1)) # Make this material blue
+        self.myMaterialIn = Material()
+        self.myMaterialIn.setAmbient((1, 1, 1, 0.5))
+        self.myMaterialIn.setShininess(1) # Make this material shiny
+        self.myMaterialIn.setSpecular((1, 1, 1, 1)) # Make this material blue
+
+        self.myMaterialSurface = Material()
+        self.myMaterialSurface.setAmbient((1, 1, 1, 1))
+        self.myMaterialSurface.setShininess(10) # Make this material shiny
+        self.myMaterialSurface.setSpecular((1, 1, 1, 1)) # Make this material blue
+
+
+        self.myMaterial_frame = Material()
+        self.myMaterial_frame.setShininess(10) # Make this material shiny
+        self.myMaterial_frame.setAmbient((0,0,30,1)) # Make this material shiny
+        self.myMaterial_frame.setSpecular((1, 1, 1, 1)) # Make this material blue
+
 
         self.temperature_previous = 0
         self.temperature_current = 0
@@ -247,6 +287,9 @@ class App(ShowBase):
 
         # Initialize the recognizer
         self.r = sr.Recognizer()
+
+        self.networkG = nx.DiGraph()
+        self.layout = None
 
 
     def camera_control(self):
@@ -277,7 +320,7 @@ class App(ShowBase):
                 self.instructionText4.show()
                 self.instructionText5.show()
                 self.instructionText6.show()
-                self.warning.show()
+                #self.warning.show()
                 #self.entry.show()
             elif self.hide_instruction == 0:
                 self.hide_instruction = 1
@@ -288,7 +331,7 @@ class App(ShowBase):
                 self.instructionText4.hide()
                 self.instructionText5.hide()
                 self.instructionText6.hide()
-                self.warning.hide()
+                #self.warning.hide()
                 #self.entry.hide()
 
     def box_frame_control(self):
@@ -314,7 +357,7 @@ class App(ShowBase):
             self.show_node = 1
             self.node_for_render_node.hide()
         elif self.show_node == 1:
-            self.show_node = 1
+            self.show_node = 0
             self.node_for_render_node.show()
 
 
@@ -370,9 +413,11 @@ class App(ShowBase):
                         self.x_origin = self.x_origin-(x1-pos[0])
                         self.y_origin = self.y_origin-(y1-pos[1])
                         self.z_origin = self.z_origin-(z1-pos[2])
+                if self.compute1>960:
+                    self.sayHint.setText("You can say something now")
                 self.compute1+=3
-
             elif self.compute1==1002:
+                #self.sayHint.setText(self.warningText)
                 for i in self.co_reference_frame:
                     frame = self.loader.loadModel("models/box")
                     frame.setPosHprScale(i[0], i[1], i[2])
@@ -381,19 +426,46 @@ class App(ShowBase):
                     frame.setColorScale(1,0,0,1)
                     frame.reparentTo(self.co_reference_node)
                 self.compute1+=3
-                self.sayHint.setText("You can say something")
+
+
+                print("finsih429")
                 self.start_circle = False
 
 
+
+
+
+
         return Task.cont
+    '''
     def change_light_temperature(self, Task):
         if self.move_camera:
-            self.alnp.node().setColorTemperature(self.temperature_previous + (self.temperature_current-self.temperature_previous)*self.compute/1000)
+            compute_temperature = self.temperature_previous + (self.temperature_current-self.temperature_previous)*self.compute/1000
+            #self.alnp.node().setColorTemperature(compute_temperature)
+            illuminant_XYZ = np.array([0.34570, 0.35850])
+            illuminant_RGB = np.array([0.31270, 0.32900])
+            chromatic_adaptation_transform = 'Bradford'
+            matrix_XYZ_to_RGB = np.array(
+                [[3.24062548, -1.53720797, -0.49862860],
+                 [-0.96893071, 1.87575606, 0.04151752],
+                 [0.05571012, -0.20402105, 1.05699594]]
+            )
+
+            if self.input_sentence_number==1:
+                self.temperature_previous = self.temperature_current
+            XYZ = colour.xy_to_XYZ(colour.CCT_to_xy(compute_temperature))
+            color = colour.XYZ_to_RGB(XYZ, illuminant_XYZ, illuminant_RGB, matrix_XYZ_to_RGB,
+            chromatic_adaptation_transform)
+            print("result_color", color,compute_temperature)
+
+            #self.alnp.node().setColor((random.random(),random.random(),random.random(),1))
+            self.setBackgroundColor((color[0], color[1], color[2]))
         return Task.cont
+    '''
     def render_next_task(self, Task):
         if self.render_next:
             self.render_count+=1
-            if self.render_count % 100 ==0:
+            if self.render_count % 200 ==0:
                 print("render_next")
                 messenger.send('render')
         return Task.cont
@@ -405,10 +477,10 @@ class App(ShowBase):
         if self.render_next:
             if self.render_index<self.count:
                 for node in self.node_dict[self.render_index]:
-                    node.setMaterial(self.myMaterial,1)
+                    #node.setMaterial(self.myMaterial,1)
                     node.reparentTo(self.node_for_sentence)
                 for node in self.node_dict_frame[self.render_index]:
-                    node.setMaterial(self.myMaterial,1)
+                    node.setMaterial(self.myMaterial_frame,1)
                     node.reparentTo(self.node_for_sentence_frame)
                 self.render_index+=1
 
@@ -418,33 +490,28 @@ class App(ShowBase):
                 self.compute1 = 0
                 self.render_next = False
 
-                self.warning.setText(self.warningText)
+                #self.warning.setText(self.warningText)
+
                 print("This sentence is finished. Please input a new one.")
 
 
 
     def listenMicTask(self, task):
+
         if task.time>5:
             while (True)&self.start_circle==False:
-
                 try:
-                    # use the microphone as source for input.
                     with sr.Microphone() as source2:
-
-                        # wait for a second to let the recognizer
-                        # adjust the energy threshold based on
-                        # the surrounding noise level
-                        self.r.adjust_for_ambient_noise(source2, duration=1)
-
+                        self.r.adjust_for_ambient_noise(source2, duration=0.5)
                         #listens for the user's input
-                        audio2 = self.r.listen(source2,phrase_time_limit = 4)
+                        audio2 = self.r.listen(source2,phrase_time_limit = 5)
                         wav_data = audio2.get_wav_data()
                         with open('your_file.wav', 'wb') as file:
                             file.write(wav_data)
                         rate, audio = wavfile.read('your_file.wav')
 
                         time, frequency, confidence, activation = crepe.predict(audio, rate, viterbi=True)
-                        self.input_pitch = np.mean(frequency)
+                        self.input_pitch = frequency
 
                         self.input_volume = rms(wav_data)
 
@@ -452,7 +519,10 @@ class App(ShowBase):
                         MyText = self.r.recognize_google(audio2)
                         MyText = MyText.lower()
 
+
                         print("Did you say "+MyText)
+                        self.sayHint.setText(" ")
+
                         self.start_circle = True
                         self.inputText(MyText)
 
@@ -464,10 +534,16 @@ class App(ShowBase):
         return Task.cont
 
 
+    def clearText(self):
+        global cube
+        self.entry.enterText('')
+
     def inputText(self, s):
         if 1>0:
-            self.sayHint.setText(" ")
-            self.zoom_rate = 0.5+30*self.input_volume
+            self.compute1 = 0
+            self.moving = False
+
+            self.zoom_rate = 0.2+30*self.input_volume
             print("self.input_volume", self.input_volume)
             self.node_for_sentence = self.node_for_render.attachNewNode("node_for_"+str(self.input_sentence_number))
             self.node_for_sentence_frame = self.node_for_render_sentence.attachNewNode("node_for_"+str(self.input_sentence_number)+"frame")
@@ -475,7 +551,7 @@ class App(ShowBase):
             self.move_camera = False
             self.compute = 0
             self.render_next = False
-            self.warning.setText('')
+            #self.warning.setText('')
             self.bk_text = s
             self.render_index = 0
             self.move_sentence_index = {}
@@ -511,12 +587,12 @@ class App(ShowBase):
             [x_origin, y_origin,z_origin] = solve_point_on_vector(0,0,0, time_period*self.distance_offset, sent_vect[0],sent_vect[1], sent_vect[2])
             self.x_origin = x_origin
             self.y_origin = y_origin
-            '''
-            if z_origin>5:
-                z_origin = 5
-            elif z_origin<-5:
-                z_origin = -5
-            '''
+
+            if z_origin>1:
+                z_origin = random.random()
+            elif z_origin<-1:
+                z_origin = -random.random()
+
             self.z_origin = z_origin
 
 
@@ -524,17 +600,38 @@ class App(ShowBase):
             # seperate the sentence into word list
             word_list = nltk.word_tokenize(sentence)
             # compute the sentiment value of the given sentence
+
+            res = np.array_split(self.input_pitch,len(word_list))
+            pitch_res = []
+            for pitch in res:
+                pitch_res.append(np.mean(pitch)/100)
+            print("pitch_res", pitch_res)
+
+
             sentiment = compute_sent_sentiment(sentence)
             # compute parts of the speech of the given sentence
             res_parts = compute_sent_parts(word_list)
+
+
 
             self.temperature_previous = self.temperature_current
 
             # control the overall sentiment of all the in
             self.sum_sentiment+=sentiment
-            self.temperature_current = 6500-6500*self.sum_sentiment/self.input_sentence_number
+
+            self.temperature_current = 25000-21000*self.sum_sentiment/self.input_sentence_number
+            print("self.temperature_current", self.temperature_current)
+
             if self.input_sentence_number==1:
                 self.temperature_previous = self.temperature_current
+
+
+            #self.alnp.node().setColorTemperature(self.temperature_current)
+            render.setLight(self.alnp)
+            render.set_shader(self.shader)
+            print("self.temperature_current", self.temperature_current,self.alnp.node().getColor())
+
+
 
 
 
@@ -579,7 +676,7 @@ class App(ShowBase):
                 sub_word_list = sub_sentence.split(' ')
                 # compute the starting point based on the origin position, the length of the sub sentence and the sub sentence vector.
                 [x_old_1, y_old_1,z_old_1] = solve_point_on_vector(x_origin, y_origin,z_origin, len(sub_word_list), i0*sub_sent_vect[0], i1*sub_sent_vect[1], i2*sub_sent_vect[2])
-
+                z_sub_origin = copy.deepcopy(z_old_1)
                 # process each word in the sub sentence
                 for word in sub_word_list:
 
@@ -601,13 +698,17 @@ class App(ShowBase):
                     i1 = test_positive(ny)
                     i2 = test_positive(nz)
 
-                    # compute the front surface of the framework
-                    # compute the second point of the framework
-                    [x2, y2, z2] = solve_point_on_vector(x_old_1, y_old_1, z_old_1, w, i0*sub_sent_vect[0],i1*sub_sent_vect[1], i2*sub_sent_vect[2])
 
                     x1 = x_old_1
                     y1 = y_old_1
-                    z1 = z_old_1
+                    z1 = z_sub_origin+10*(pitch_res[count]-1.5)
+                    print("z1",z1)
+
+                    # compute the front surface of the framework
+                    # compute the second point of the framework
+                    [x2, y2, z2] = solve_point_on_vector(x1, y1, z1, w, i0*sub_sent_vect[0],i1*sub_sent_vect[1], i2*sub_sent_vect[2])
+
+
 
                     # use the word-level to determine the framework's height
                     distance = 4*max(res_key.get(word, [0.5]))*self.zoom_rate
@@ -700,7 +801,7 @@ class App(ShowBase):
                     frame1.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z1-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
                     frame1.setTransparency(1)
                     frame1.setColorScale(0, 0.1, 0.2,0.9)
-                    frame1.setShaderAuto()
+                    #frame1.setShaderAuto()
 
                     node_dict_frame[count].append(frame1)
 
@@ -709,7 +810,7 @@ class App(ShowBase):
                     frame2.setTextureOff(1)
                     frame2.setTransparency(1)
                     frame2.setColorScale(0, 0.1, 0.2,0.9)
-                    frame2.setShaderAuto()
+                    #frame2.setShaderAuto()
                     node_dict_frame[count].append(frame2)
 
                     frame3 = self.loader.loadModel("models/box")
@@ -828,10 +929,11 @@ class App(ShowBase):
                         node_f.setTransparency(1)
                         howOpaque=0.5+abs(color_value[2])*0.5
                         node_f.setColorScale(1,1,1,1)
-                        node_f.setTwoSided(True)
+                        #node_f.setTwoSided(True)
+                        node_f.setAttrib(DepthOffsetAttrib.make(0))
                         node_f.setTexture(testTexture)
-                        node_f.setMaterial(self.myMaterial)
-                        node_f.setShaderAuto()
+                        node_f.setMaterial(self.myMaterialSurface)
+                        #node_f.setShaderAuto()
                         node_dict[count].append(node_f)
                         # compute the back surface of the framework
                         square_b = makeQuad(x_move1, y_move1, z1, x_move2, y_move2, z2, x_move1, y_move1, z3, x_move2, y_move2, z4, test_color,[x_origin,y_origin,z_origin],1)
@@ -844,9 +946,10 @@ class App(ShowBase):
                         node_b.setTransparency(1)
                         howOpaque=0.5+abs(color_value[2])*0.5
                         node_b.setColorScale(1,1,1,1)
-                        node_b.setTwoSided(True)
+                        #node_b.setTwoSided(True)
+                        node_b.setAttrib(DepthOffsetAttrib.make(0))
                         node_b.setTexture(testTexture)
-                        node_b.setMaterial(self.myMaterial)
+                        node_b.setMaterial(self.myMaterialSurface)
                         node_dict[count].append(node_b)
 
                     # if the word is a verb, draw the horizontal surfaces of the frame
@@ -868,9 +971,10 @@ class App(ShowBase):
                         node_bottom.setTransparency(1)
                         howOpaque=0.5+abs(color_value[2])*0.5
                         node_bottom.setColorScale(1,1,1,1)
-                        node_bottom.setTwoSided(True)
+                        #node_bottom.setTwoSided(True)
+                        node_bottom.setAttrib(DepthOffsetAttrib.make(0))
                         node_bottom.setTexture(testTexture)
-                        node_bottom.setMaterial(self.myMaterial)
+                        node_bottom.setMaterial(self.myMaterialSurface)
                         node_dict[count].append(node_bottom)
 
                         # draw the top surface of the framework
@@ -883,9 +987,10 @@ class App(ShowBase):
                         node_up.setTransparency(1)
                         howOpaque=0.5+abs(color_value[2])*0.5
                         node_up.setColorScale(1,1,1,1)
-                        node_up.setTwoSided(True)
+                        #node_up.setTwoSided(True)
+                        node_up.setAttrib(DepthOffsetAttrib.make(0))
                         node_up.setTexture(testTexture)
-                        node_up.setMaterial(self.myMaterial)
+                        node_up.setMaterial(self.myMaterialSurface)
                         node_dict[count].append(node_up)
 
                     # store the 8 points of the framework
@@ -908,7 +1013,7 @@ class App(ShowBase):
                     # choose w surface
                     for i in range(w):
                         # choose four points from the point-list to create the surface
-                        [p_1, p_2, p_3, p_4] = random.choices(points, k=4)
+                        [p_1, p_2, p_3,p_4] = random.choices(points, k=4)
                         p1 = copy.deepcopy(p_1)
                         p2 = copy.deepcopy(p_2)
                         p3 = copy.deepcopy(p_3)
@@ -928,6 +1033,8 @@ class App(ShowBase):
 
                         p4[0] = p_4[0]+factor*random.random()-factor/2
                         p4[1] = p_4[1]+factor*random.random()-factor/2
+
+
 
                         color_all = []
 
@@ -950,7 +1057,8 @@ class App(ShowBase):
                     howOpaque=0.5+abs(color_value[2])*0.5
                     node_in.setColorScale(1,1,1,howOpaque)
                     node_in.setTwoSided(True)
-                    node_in.setMaterial(self.myMaterial)
+                    node_in.setAttrib(DepthOffsetAttrib.make(1))
+                    node_in.setMaterial(self.myMaterialIn)
                     node_dict[count].append(node_in)
                     count+=1
 
@@ -1022,25 +1130,26 @@ class App(ShowBase):
                                                     LVecBase3(sqrt((position_edit[0]-position_pre[0])**2+(position_edit[1]-position_pre[1])**2+(position_edit[2]-position_pre[2])**2), 0.04, 0.04)])
 
 
-        self.co_occurance_edge, self.layout = compute_co_occurrence(self.input_sentence_list,2*len(self.input_sentence.split(" ")))
+        self.co_occurance_edge, self.layout, self.networkG = compute_co_occurrence(self.networkG,self.co_occurance_edge,self.input_sentence_list,2*len(self.input_sentence.split(' ')))
+
         self.node_for_cooccurance.removeNode()
         self.node_for_cooccurance = render.attachNewNode("node_for_cooccurance")
 
         x_c = 0
         y_c = 0
         z_c = 0
-        count = 0
+        count_layout = 0
         for i in self.layout:
             pos = self.layout.get(i)
             x_c = x_c + pos[0]
             y_c = y_c + pos[1]
             #z_c = z_c + pos[2]
             z_c = 0
-            count+=1
+            count_layout+=1
 
-        x_c = x_c / count
-        y_c = y_c / count
-        z_c = z_c / count
+        x_c = x_c / count_layout
+        y_c = y_c / count_layout
+        z_c = z_c / count_layout
 
         self.x_c_img = (self.x_c_img*(self.input_sentence_number-1) + self.x_origin)/self.input_sentence_number
         self.y_c_img = (self.y_c_img*(self.input_sentence_number-1) + self.y_origin)/self.input_sentence_number
@@ -1051,13 +1160,14 @@ class App(ShowBase):
         z_offset = -self.z_c_img + z_c
 
         self.node_for_render_node_sub.removeNode()
-        self.node_for_render_node_sub = self.node_for_render_node.attachNewNode("node_for_render_node")
+        self.node_for_render_node_sub = self.node_for_render_node.attachNewNode("node_for_render_node_sub")
 
         for i in self.layout:
             pos = self.layout.get(i)
             sphere = self.loader.loadModel("models/sphere")
-            sphere.setPos(pos[0]-x_offset, pos[1]-y_offset, 10-z_offset)
+            sphere.setPos(pos[0]-x_offset, pos[1]-y_offset, pos[2]-z_offset)
             sphere.setScale(0.4,0.4,0.4)
+            sphere.setMaterial(self.myMaterial_frame,1)
             sphere.reparentTo(self.node_for_render_node_sub)
         for edge in self.co_occurance_edge:
             node1 = edge[0]
@@ -1068,16 +1178,17 @@ class App(ShowBase):
             pos2 = self.layout.get(node2)
             #pos2[2] = z_offset
             frame12 = self.loader.loadModel("models/box")
-            '''
+
             frame12.setPosHprScale(LVecBase3(pos1[0]-x_offset,pos1[1]-y_offset,pos1[2]-z_offset),LVecBase3(atan2(pos2[1]-pos1[1], pos2[0]-pos1[0])* 180.0/np.pi, 0,-atan2(pos2[2]-pos1[2], sqrt((pos2[0]-pos1[0])**2+(pos2[1]-pos1[1])**2))* 180.0/np.pi),
                                    LVecBase3(sqrt((pos2[0]-pos1[0])**2+(pos2[1]-pos1[1])**2+(pos2[2]-pos1[2])**2), 0.04*weight, 0.04*weight))
             '''
             frame12.setPosHprScale(LVecBase3(pos1[0]-x_offset,pos1[1]-y_offset,10-z_offset),LVecBase3(atan2(pos2[1]-pos1[1], pos2[0]-pos1[0])* 180.0/np.pi, 0,-atan2(0, sqrt((pos2[0]-pos1[0])**2+(pos2[1]-pos1[1])**2))* 180.0/np.pi),
                                    LVecBase3(sqrt((pos2[0]-pos1[0])**2+(pos2[1]-pos1[1])**2), 0.04*weight, 0.04*weight))
-
+            '''
             frame12.setTextureOff(1)
             frame12.setTransparency(1)
             frame12.setColorScale(0,1,0,0.9)
+            frame12.setMaterial(self.myMaterial_frame,1)
             frame12.reparentTo(self.node_for_render_node_sub)
 
 
@@ -1089,7 +1200,7 @@ class App(ShowBase):
             node.reparentTo(self.node_for_sentence)
 
         for node in self.node_dict_frame[0]:
-            node.setMaterial(self.myMaterial)
+            node.setMaterial(self.myMaterial_frame)
             node.reparentTo(self.node_for_sentence_frame)
 
         self.render_index = 1
@@ -1098,6 +1209,8 @@ class App(ShowBase):
         self.move_camera = True
         self.keyboard = True
         self.pos_list = {}
+        #self.directionalLightNP.look_at(self.x_origin, self.y_origin, self.z_origin)
+        #self.directionalLightNP2.look_at(self.x_origin, self.y_origin, self.z_origin)
 
 
 

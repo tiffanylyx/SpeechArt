@@ -203,7 +203,10 @@ import networkx as nx
 # Convert a collection of text documents to a matrix of token counts
 # look into the network
 cv = CountVectorizer()
-def compute_co_occurrence(sentence_list,scale):
+def split_list(a, n):
+    k, m = divmod(len(a), n)
+    return (a[i*k+min(i, m):(i+1)*k+min(i+1, m)] for i in range(n))
+def compute_co_occurrence(networkG,edgelist_old,sentence_list,scale):
     X = cv.fit_transform(sentence_list)
     Xc = (X.T * X)
     names = cv.get_feature_names_out()
@@ -212,13 +215,14 @@ def compute_co_occurrence(sentence_list,scale):
         for index,word in enumerate(row):
             if index>index_row:
                 if word>0:
-                    edgelist.append((names[index_row],names[index],word))
-    DG = nx.DiGraph()
-    DG.add_weighted_edges_from(edgelist)
-    print(DG)
-    l = nx.spring_layout(DG, dim = 2, scale = scale, seed = 1024)
+                    if (names[index_row],names[index],word) not in edgelist_old:
+                        edgelist.append((names[index_row],names[index],word))
+                        edgelist_old.append((names[index_row],names[index],word))
+    networkG.add_weighted_edges_from(edgelist)
+    print(networkG)
+    l = nx.spring_layout(networkG, dim = 3, scale = scale, seed = 1024)
     #print(edgelist)
-    return edgelist,l
+    return edgelist_old,l,networkG
 
 
 import struct

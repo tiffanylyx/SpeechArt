@@ -99,6 +99,14 @@ def solve_new_sec_vect(nx_s,ny_s, nz_s, x_old_1, y_old_1, z_old_1):
 
     return [r_vx, r_vy, 0]
 
+def solve_normal_with_three_point(p1,p2,p3):
+    a = ( (p2[1]-p1[1])*(p3[2]-p1[2])-(p2[2]-p1[2])*(p3[1]-p1[1]) );
+
+    b = ( (p2[2]-p1[2])*(p3[0]-p1[0])-(p2[0]-p1[0])*(p3[2]-p1[2]) );
+
+    c = ( (p2[0]-p1[0])*(p3[1]-p1[1])-(p2[1]-p1[1])*(p3[0]-p1[0]) );
+
+    return [a,b,c]
 
 def solve_quad(x1,y1,z1,nx,ny,nz,x2,w,l):
     y2 = Symbol('y2')

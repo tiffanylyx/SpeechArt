@@ -1,6 +1,7 @@
 from panda3d.core import LVector3
 from panda3d.core import GeomVertexFormat, GeomVertexData
 from panda3d.core import Geom, GeomTriangles, GeomVertexWriter,GeomTristrips
+from utils_geom import *
 
 
 from PIL import Image, ImageDraw, ImageFont
@@ -25,15 +26,18 @@ def makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, color_value,origin,
     normal = GeomVertexWriter(vdata, 'normal')
     texcoord = GeomVertexWriter(vdata, 'texcoord')
 
+    [a,b,c] = solve_normal_with_three_point([x1, y1, z1], [x2, y2, z2], [x3, y3, z3])
+
+
     vertex.addData3(x1-origin[0], y1-origin[1], z1-origin[2])
     vertex.addData3(x2-origin[0], y2-origin[1], z2-origin[2])
     vertex.addData3(x3-origin[0], y3-origin[1], z3-origin[2])
     vertex.addData3(x4-origin[0], y4-origin[1], z4-origin[2])
 
-    normal.addData3(normalized(2 * x1 - 1, 2 * y1 - 1, 2 * z1 - 1))
-    normal.addData3(normalized(2 * x2 - 1, 2 * y2 - 1, 2 * z2 - 1))
-    normal.addData3(normalized(2 * x3 - 1, 2 * y3 - 1, 2 * z3 - 1))
-    normal.addData3(normalized(2 * x4 - 1, 2 * y4 - 1, 2 * z4 - 1))
+    normal.addData3(normalized(a,b,c))
+    normal.addData3(normalized(a,b,c))
+    normal.addData3(normalized(a,b,c))
+    normal.addData3(normalized(a,b,c))
     '''
 
     normal.addData3(normalized(0,0,1))
@@ -44,12 +48,12 @@ def makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, color_value,origin,
 
     if mode==0:
         for color_v in color_value:
-            color.addData4(abs(color_v[0]), abs(color_v[1]), abs(color_v[2]), 1)
+            color.addData4(abs(color_v[0]), abs(color_v[1]), abs(color_v[2]), 0.5)
     elif mode==1:
-        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
-        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
-        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
-        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 1)
+        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]),0.5)
+        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 0.5)
+        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 0.5)
+        color.addData4(abs(color_value[0]), abs(color_value[1]), abs(color_value[2]), 0.5)
 
     texcoord.addData2f(0, 0)
     texcoord.addData2f(0, 1)
