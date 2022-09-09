@@ -31,6 +31,8 @@ import torch
 
 import time
 
+import transformers
+
 
 model_url = "https://storage.googleapis.com/allennlp-public-models/coref-spanbert-large-2020.02.27.tar.gz"
 predictor = Predictor.from_path(model_url)
@@ -238,3 +240,11 @@ def rms( data ):
         n = sample * (1.0/32768)
         sum_squares += n*n
     return math.sqrt( sum_squares / count )
+
+chatbot = transformers.pipeline("conversational",model="microsoft/DialoGPT-medium")
+
+def generate_conversation(sentence, chatbot):
+    res = chatbot(transformers.Conversation(sentence),pad_token_id=50256)
+    res = str(res)
+    res = res[res.find("bot >> ")+6:].strip()
+    return res

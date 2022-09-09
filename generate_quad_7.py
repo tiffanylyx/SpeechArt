@@ -1,8 +1,10 @@
 # This version takes speech input to generate structure.
-## Version 6
-## created on Aug 23, 2022
+## Version 7
+## created on Sep 9, 2022
 
-## Update on Aug 23 since last version: add speech input, add more UI control
+## Update on Sep 9 since last version: This version takes language input in real time and have continous structure movement.
+## The language recognition part's accurancy has been improved.
+## The overall performance has been improved a lot.
 
 # You can find the source code of the following functions on this page. Some might not be avaliable on this page.
 # https://docs.panda3d.org/1.10/python/_modules/index
@@ -115,6 +117,21 @@ text_all = ''
 import torchcrepe
 import audioop
 
+
+
+# Provide a sensible frequency range for your domain (upper limit is 2006 Hz)
+# This would be a reasonable range for speech
+fmin = 50
+fmax = 550
+
+# Select a model capacity--one of "tiny" or "full"
+model_pitch = 'tiny'
+
+# Choose a device to use for inference
+device = 'cuda:0'
+
+# Pick a batch size that doesn't cause memory errors on your gpu
+batch_size = 2048
 
 import time
 
@@ -336,7 +353,7 @@ class App(ShowBase):
         self.temperature_previous = 0
         self.temperature_current = 0
 
-        self.zoom_rate = 1
+        #self.zoom_rate = 1
         self.co_occurance_edge = []
         self.node_for_cooccurance = render.attachNewNode("node_for_cooccurance")
 
@@ -383,7 +400,8 @@ class App(ShowBase):
 
         self.this_sentence_word_structure = {}
         self.word_position = {}
-
+        self.word_length_information = {}
+        #self.pitch_res = []
     def camera_control(self):
         if self.keyboard:
             if self.camera_mode == 0:
@@ -589,17 +607,33 @@ class App(ShowBase):
             wavefile.writeframes(b''.join(frames))
             wavefile.close()
             harvard = sr.AudioFile('your_file'+str(self.recordCount)+'.wav')
+            rms = audioop.rms(b''.join(frames), 2)
+            self.zoom_rate = max(1,(rms-600)/300)*0.6
+            audio, srate = torchcrepe.load.audio('your_file'+str(self.recordCount)+'.wav' )
 
+            # Here we'll use a 5 millisecond hop length
+            hop_length = int(srate / 20.)
+            # Compute pitch using first gpu
+            pitch = torchcrepe.predict(audio,srate,hop_length,fmin,fmax,model_pitch,batch_size=batch_size)
+
+            #print("pitch: ", np.mean(pitch))
             with harvard as source:
                 audio = r.record(source)
             try:
                 MyText = r.recognize_google(audio)
+
 
                 if self.recordCount==1:
                     MyText = ' '.join(MyText.split(" ")[:-1])
                 else:
                     MyText = ' '.join(MyText.split(" ")[1:-1])
                 print("MyText", MyText)
+                res = np.array_split(pitch[0],len(MyText))
+
+                pitch_res = []
+                for pitch_word in res:
+
+                    pitch_res.append((np.mean(pitch_word.numpy())-210)/4)
 
                 self.text_old = copy.deepcopy(self.text_all)
 
@@ -616,13 +650,13 @@ class App(ShowBase):
 
 
                 word_list = self.text_add.split(" ")
-                print("Word List: ", word_list)
                 self.last_sentence_with_punctuation_old = copy.deepcopy(self.last_sentence_with_punctuation)
                 #print("Word list: ", word_list)
                 res_parts = compute_sent_parts(word_list)
                 for count, word in enumerate(word_list):
                     if len(word)>0:
-                        self.inputWord(word,res_parts[count][1] )
+                        pitch_word = pitch_res[count]
+                        self.inputWord(word,res_parts[count][1],pitch_word )
                 self.get_result = True
             except sr.RequestError as e:
                 print("Could not request results; {0}".format(e))
@@ -709,9 +743,9 @@ class App(ShowBase):
 
                     # generate dialogue
 
-                    #answer = generate_conversation(self.last_sentence_with_punctuation,chatbot)
-                    #print("Input: ",self.last_sentence_with_punctuation)
-                    #print("Answer: ",answer)
+                    answer = generate_conversation(self.last_sentence_with_punctuation,chatbot)
+                    print("Input: ",self.last_sentence_with_punctuation)
+                    print("Answer: ",answer)
 
 
 
@@ -733,7 +767,7 @@ class App(ShowBase):
 
         sentiment = compute_sent_sentiment(sentence)
         sent_vect = compute_sent_vec(sentence, model_sentence,pca3_sentenceVec)
-        #self.co_reference = compute_co_reference(self.input_sentence)
+        self.co_reference = compute_co_reference(self.input_sentence)
 
 
 
@@ -792,7 +826,7 @@ class App(ShowBase):
             y_old_1 = 0
             z_old_1 = 0
             for index,word in enumerate(sub_word_list):
-                w = int(max(3,1.5*compute_word_length(word))*self.zoom_rate)
+                w = self.word_length_information.get(word+"_"+str(word_index),1)
 
                 if index == 0:
                     self.word_position[word+"_"+str(word_index)] = (0,0,0)
@@ -869,14 +903,15 @@ class App(ShowBase):
 
 
 
-    def inputWord(self, word, pos):
+    def inputWord(self, word, pos,pitch_word):
 
         self.node_for_this_word = self.node_for_word.attachNewNode("node_for_word_"+word+"_"+str(self.word_index))
         self.node_for_this_word_frame = self.node_for_word_frame.attachNewNode("node_for_word_frame_"+word+"_"+str(self.word_index))
         #print("Word+Index: ",word, self.word_index)
         self.node_dict[self.word_index] = []
         self.node_dict_frame[self.word_index] = []
-        self.word_position[word+"_"+str(self.word_index)] = 0
+
+        self.word_length_information[word+"_"+str(self.word_index)] = 0
         if len(word)==0:
             pass
         syllables = compute_syllables(word,d)
@@ -887,6 +922,7 @@ class App(ShowBase):
         [nx, ny, nz] = compute_word_vec(word, model, pca2, pca3, pca4, 3)
         # compute the word length
         w = int(max(3,1.5*compute_word_length(word))*self.zoom_rate)
+        self.word_position[word+"_"+str(self.word_index)] = w
         # add some +/- variance
         i0 = test_positive(nx)
         i1 = test_positive(ny)
@@ -895,7 +931,7 @@ class App(ShowBase):
 
         x1 = 0#self.x_old_1
         y1 = 0#self.y_old_1
-        z1 = 0#self.z_old_1#z_sub_origin+10*(pitch_res[self.word_index]-1.5)
+        z1 = pitch_word
         #print("z1",x1,y1,z1)
 
         # compute the front surface of the framework
@@ -949,7 +985,7 @@ class App(ShowBase):
             self.y_old_1 = y2
             self.z_old_1 = z2
         else:
-            distance_horizontal = w/2
+            distance_horizontal = (w/2)
             distance_vertical = w/2
             offset = 0
 
