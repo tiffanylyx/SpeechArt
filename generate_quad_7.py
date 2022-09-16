@@ -180,7 +180,7 @@ class App(ShowBase):
         # create a window and set up everything we need for rendering into it.
         ShowBase.__init__(self)
         self.keyboard = False
-        self.shader = Shader.load(Shader.SL_GLSL, "models/lighting.vert", "models/lighting.frag")
+        #self.shader = Shader.load(Shader.SL_GLSL, "models/lighting.vert", "models/lighting.frag")
 
         # set up basic functions
         self.setBackgroundColor(0.7,0.7,0.7)
@@ -192,7 +192,7 @@ class App(ShowBase):
         self.camLens.setFar(100)
         self.taskMgr.add(self.spinCameraTask, "SpinCameraTask")
         #self.taskMgr.add(self.moving_structure,"Moving Structure")
-        #self.taskMgr.add(self.change_light_temperature,"Change Light Temperature")
+        self.taskMgr.add(self.change_light_temperature,"Change Light Temperature")
         self.taskMgr.add(self.recordingTask,"Listen Mic Task")
         #self.taskMgr.add(self.render_next_task, "Render Next Task")
         self.taskMgr.add(self.getInputTask,"getInputTask")
@@ -211,6 +211,10 @@ class App(ShowBase):
         self.instructionText8 = self.makeStatusLabel("N: hide the node structure",13.5)
 
 
+        self.inputSentence = self.makeStatusLabel("Input Sentence: ",15)
+        self.generateAnswer = self.makeStatusLabel("Generated Answer: ",16.5)
+
+
         #add text entry
         #self.warning = self.makeStatusLabel(" ",0)
         self.sayHint = self.makeStatusLabel("You can say something",0)
@@ -224,9 +228,10 @@ class App(ShowBase):
 
 
         self.alight = AmbientLight('alight')
-        self.alight.setColor((0.5,0.5,0.5,1))
+        self.alight.setColor((1,1,1,1))
         #self.alight.setColor(VBase4(skycol * 0.04, 1))
         self.alnp = render.attachNewNode(self.alight)
+        self.alnp.node().setColorTemperature(6000)
         render.setLight(self.alnp)
 
 
@@ -245,7 +250,6 @@ class App(ShowBase):
         # This light is facing forwards, away from the camera.
         #self.directionalLightNP.setHpr(0, -20, 0)
         render.setLight(self.directionalLightNP)
-        #self.directionalLightNP.set_shader(self.shader)
         '''
         self.directionalLight2 = DirectionalLight('directionalLight2')
         #self.directionalLight2.setColor((1, 1, 1, 1))
@@ -262,7 +266,7 @@ class App(ShowBase):
         render.setLight(self.directionalLightNP2)
         '''
         render.setAntialias(AntialiasAttrib.MAuto)
-        render.set_shader(self.shader)
+        #render.set_shader(self.shader)
 
         # control the event
         self.accept("escape", sys.exit)
@@ -353,6 +357,10 @@ class App(ShowBase):
         self.temperature_previous = 0
         self.temperature_current = 0
 
+        self.sentiment_previous = 0.5
+        self.sentiment_current = 0.5
+
+
         #self.zoom_rate = 1
         self.co_occurance_edge = []
         self.node_for_cooccurance = render.attachNewNode("node_for_cooccurance")
@@ -401,6 +409,10 @@ class App(ShowBase):
         self.this_sentence_word_structure = {}
         self.word_position = {}
         self.word_length_information = {}
+        self.word_pos_dict={}
+
+        self.sentence_length = 0
+        self.first_sentence_length = 0
         #self.pitch_res = []
     def camera_control(self):
         if self.keyboard:
@@ -510,50 +522,17 @@ class App(ShowBase):
                 R = self.camera.getR()
         return Task.cont
 
-    def moving_structure(self, Task):
-        if self.moving:
-            if self.compute1<1000:
-                if self.compute1==0:
-                    for index in self.move_sentence_index:
-                        node = self.node_for_render.getChild(index)
-                        [x1, y1, z1] = node.getPos()
-                        self.pos_list[index]=[x1, y1, z1]
-                for index in self.move_sentence_index:
-                    pos  = self.move_sentence_index.get(index)
-                    node = self.node_for_render.getChild(index)
-                    [x1, y1, z1] = self.pos_list.get(index)
-                    node.setPos(x1+(pos[0]-x1)*self.compute1/1000,y1+(pos[1]-y1)*self.compute1/1000, z1+(pos[2]-z1)*self.compute1/1000)
-                    self.node_for_render_sentence.getChild(index).setPos(x1+(pos[0]-x1)*self.compute1/1000,y1+(pos[1]-y1)*self.compute1/1000, z1+(pos[2]-z1)*self.compute1/1000)
-                    if  self.compute1 == 0:
-                        self.x_origin = self.x_origin-(x1-pos[0])
-                        self.y_origin = self.y_origin-(y1-pos[1])
-                        self.z_origin = self.z_origin-(z1-pos[2])
-                if self.compute1>960:
-                    self.sayHint.setText("You can say something now")
-                self.compute1+=3
-            elif self.compute1==1002:
-                #self.sayHint.setText(self.warningText)
-                for i in self.co_reference_frame:
-                    frame = self.loader.loadModel("models/box")
-                    frame.setPosHprScale(i[0], i[1], i[2])
-                    frame.setTextureOff(1)
-                    frame.setTransparency(1)
-                    frame.setColorScale(1,0,0,1)
-                    frame.reparentTo(self.co_reference_node)
-                self.compute1+=3
+    def change_light_temperature(self, Task):
+        if self.move_camera:
+            current_color = self.temperature_previous + (self.temperature_current-self.temperature_previous)*self.compute/1000
+            current_sentiment = self.sentiment_previous + (self.sentiment_current-self.sentiment_previous)*self.compute/1000
 
+            self.alnp.node().setColorTemperature(current_color)
+            back_color = colorsys.hsv_to_rgb(current_sentiment, current_sentiment,current_sentiment)
 
-                print("finsih429")
-                self.start_circle = False
+            self.setBackgroundColor(back_color)
         return Task.cont
 
-    def render_next_task(self, Task):
-        if self.render_next:
-            self.render_count+=1
-            if self.render_count % 200 ==0:
-                print("render_next")
-                messenger.send('render')
-        return Task.cont
 
 
     # Define a procedure to move the camera.
@@ -628,12 +607,6 @@ class App(ShowBase):
                 else:
                     MyText = ' '.join(MyText.split(" ")[1:-1])
                 print("MyText", MyText)
-                res = np.array_split(pitch[0],len(MyText))
-
-                pitch_res = []
-                for pitch_word in res:
-
-                    pitch_res.append((np.mean(pitch_word.numpy())-210)/4)
 
                 self.text_old = copy.deepcopy(self.text_all)
 
@@ -650,13 +623,23 @@ class App(ShowBase):
 
 
                 word_list = self.text_add.split(" ")
-                self.last_sentence_with_punctuation_old = copy.deepcopy(self.last_sentence_with_punctuation)
-                #print("Word list: ", word_list)
-                res_parts = compute_sent_parts(word_list)
-                for count, word in enumerate(word_list):
-                    if len(word)>0:
-                        pitch_word = pitch_res[count]
-                        self.inputWord(word,res_parts[count][1],pitch_word )
+                if len(word_list)>0:
+                    res = np.array_split(pitch[0],len(word_list))
+
+                    pitch_res = []
+                    for pitch_word in res:
+
+                        pitch_res.append((np.mean(pitch_word.numpy())-210)/4)
+
+                    self.last_sentence_with_punctuation_old = copy.deepcopy(self.last_sentence_with_punctuation)
+                    #print("Word list: ", word_list)
+                    res_parts = compute_sent_parts(word_list)
+                    self.x_old_1 =0
+                    self.y_old_1 = 0
+                    for count_index, word in enumerate(word_list):
+                        if len(word)>0:
+                            pitch_word = pitch_res[count_index]
+                            self.inputWord(word,res_parts[count_index][1],pitch_word )
                 self.get_result = True
             except sr.RequestError as e:
                 print("Could not request results; {0}".format(e))
@@ -666,18 +649,6 @@ class App(ShowBase):
 
             time.sleep(1)
 
-    def process_word(self):
-        print("getInput", getInput.empty())
-        while not getInput.empty():
-            getInput.get()
-            word_list = self.text_add.split(" ")
-            print("Word List: ", word_list)
-            self.last_sentence_with_punctuation_old = copy.deepcopy(self.last_sentence_with_punctuation)
-            #print("Word list: ", word_list)
-            res_parts = compute_sent_parts(word_list)
-            for count, word in enumerate(word_list):
-                if len(word)>0:
-                    self.inputWord(word,res_parts[count][1] )
 
     def check(self,s1, s2):
         length1 = len(s1)
@@ -709,9 +680,16 @@ class App(ShowBase):
                 self.sentence_with_punctuation_new.remove(" ")
             if "" in self.sentence_with_punctuation_new:
                 self.sentence_with_punctuation_new.remove("")
+            if len(self.sentence_with_punctuation_new) == 1:
+                first_sentence = self.sentence_with_punctuation_new[0]
+                first_sentence = pre_process_sentence(first_sentence)
+                sentence_length = len(word_tokenize(first_sentence))
+                self.first_sentence_length = sentence_length
+                print("self.first_sentence_length: ", self.first_sentence_length)
 
             if len(self.sentence_with_punctuation_new)>1:
                 self.last_sentence_with_punctuation_new = self.sentence_with_punctuation_new[-2]
+                start_index = 0
                 #print("Sentence Here: ", self.last_sentence_with_punctuation_new)
                 if self.last_sentence_with_punctuation_new!= self.last_sentence_with_punctuation_old:
                     index = 0
@@ -722,8 +700,10 @@ class App(ShowBase):
                                 word_list.remove(" ")
                             if '' in word_list:
                                 word_list.remove('')
-                            index += len(word_list)
+                            if len(word_list)>1:
+                                index += len(word_list)
                     start_index = index
+
                     self.this_sentence_word_structure = {}
 
                     self.last_sentence_with_punctuation = self.last_sentence_with_punctuation_new
@@ -738,37 +718,48 @@ class App(ShowBase):
                         index += 1
                     #self.word_list_for_this_sentence = []
                     if len(self.last_sentence_with_punctuation)>0:
+                        word_list = nltk.word_tokenize(self.last_sentence_with_punctuation)
+                        if len(word_list)>1:
+                            self.inputSentence.setText("Input Sentence: "+self.last_sentence_with_punctuation)
 
-                        self.process_sentence(self.last_sentence_with_punctuation, self.this_sentence_word_structure,start_index)
+                            self.process_sentence(self.last_sentence_with_punctuation, self.this_sentence_word_structure,start_index)
+
 
                     # generate dialogue
 
                     answer = generate_conversation(self.last_sentence_with_punctuation,chatbot)
-                    print("Input: ",self.last_sentence_with_punctuation)
-                    print("Answer: ",answer)
+                    self.generateAnswer.setText("Generated Answer: "+answer)
 
 
 
         return Task.cont
 
+
     def process_sentence(self, sentence, structure_dict,start_index):
+        self.move_camera = False
+        self.compute = 0
+        self.input_sentence_number+=1
         mySequence_move = Parallel()
         sentence = pre_process_sentence(sentence)
         self.input_sentence = self.input_sentence+" " + sentence
         self.input_sentence_list.append(sentence)
 
         print("Whole Sentence: ", sentence)
-        self.node_for_sentence = self.node_for_render_sentence.attachNewNode("node_for_sentence_"+sentence)
+
+        self.node_for_sentence = self.node_for_render_sentence.attachNewNode("node_for_sentence_"+str(self.input_sentence_number))
+        self.node_for_sentence_frame = self.node_for_render_sentence.attachNewNode("node_for_sentence_frame"+str(self.input_sentence_number))
         # compute the time difference between two sentence input
         now_time = time.time()
         time_period = now_time-self.previous_time
         word_list = nltk.word_tokenize(sentence)
 
+        self.sentence_length = len(word_list)
+
 
         sentiment = compute_sent_sentiment(sentence)
         sent_vect = compute_sent_vec(sentence, model_sentence,pca3_sentenceVec)
         self.co_reference = compute_co_reference(self.input_sentence)
-
+        print("Input Sentence: ", self.input_sentence)
 
 
         self.x_origin_pre = copy.deepcopy(self.x_origin)
@@ -781,26 +772,36 @@ class App(ShowBase):
 
         # compute parts of the speech of the given sentence
         res_parts = compute_sent_parts(word_list)
+        #print("res part: ", res_parts)
         word_parts, res_key = get_cfg_structure(word_list)
         if len(word_parts)==0:
             word_parts = word_list
             sub_sentences = [sentence]
         else:
             # clean the data
-            split_word = word_parts[-1][0]
-            if len(split_word)==1:
-                sub_sentences = [0,0]
-                sub_sentences[0] = ' '.join(word_parts[0])
-                sub_sentences[-1] = sentence.lstrip(sub_sentences[0])
-            else:
-                sub_sentences = sentence.split(" "+split_word+" ")
-                if len(sub_sentences)>1:
-                    sub_sentences[0] = sub_sentences[0]
-                    sub_sentences[-1] = split_word+" "+sub_sentences[-1]
+            try:
+                split_word = word_parts[-1][0]
+                if len(split_word)==1:
+                    sub_sentences = [0,0]
+                    sub_sentences[0] = ' '.join(word_parts[0])
+                    sub_sentences[-1] = sentence.lstrip(sub_sentences[0])
+                else:
+                    sub_sentences = sentence.split(" "+split_word+" ")
+                    if len(sub_sentences)>1:
+                        sub_sentences[0] = sub_sentences[0]
+                        sub_sentences[-1] = split_word+" "+sub_sentences[-1]
+            except:
+                sub_sentences = [sentence]
+
         count = 0
         word_index = start_index
+        name_list = []
+        name_list_frame = []
+
+        start_position = (0,0,0)
         # process the subsentence (NP and VP)
         for sub_sentence in sub_sentences:
+            print("Sub Sentence: ", sub_sentence)
             self.node_for_sub_sentence = self.node_for_sentence.attachNewNode("node_for_sub_sentence_"+sub_sentence)
             self.node_for_sub_sentence_frame = self.node_for_sentence_frame.attachNewNode("node_for_sub_sentence_frame"+sub_sentence)
 
@@ -816,55 +817,72 @@ class App(ShowBase):
                 sub_word_list.remove(" ")
             if '' in word_list:
                 sub_word_list.remove('')
+            if ',' in word_list:
+                sub_word_list.remove(',')
             # compute the starting point based on the origin position, the length of the sub sentence and the sub sentence vector.
-            [x_sub_origin, y_sub_origin,z_sub_origin] = solve_point_on_vector(x_origin, y_origin,z_origin, len(sub_word_list), i0*sub_sent_vect[0], i1*sub_sent_vect[1], i2*sub_sent_vect[2])
-            name_list = []
-            name_list_frame = []
-            pos_dict = {}
-            start_position = (0,0,0)
+            [x_sub_origin, y_sub_origin,z_sub_origin] = solve_point_on_vector(0,0,0, len(sub_word_list), i0*sub_sent_vect[0], i1*sub_sent_vect[1], i2*sub_sent_vect[2])
+
             x_old_1 = 0
             y_old_1 = 0
             z_old_1 = 0
+            if len(sub_word_list)==0:
+                continue
             for index,word in enumerate(sub_word_list):
                 w = self.word_length_information.get(word+"_"+str(word_index),1)
 
                 if index == 0:
-                    self.word_position[word+"_"+str(word_index)] = (0,0,0)
+                    self.word_position[word+"_"+str(word_index)] = (0,0,0)+self.word_position.get(word+"_"+str(word_index),(0,0,0))
                 else:
                     [x1, y1, z1] = solve_point_on_vector(x_old_1, y_old_1, z_old_1, w, i0*sub_sent_vect[0],i1*sub_sent_vect[1], i2*sub_sent_vect[2])
-                    self.word_position[word+"_"+str(word_index)] = (x1, y1, z1)
+                    self.word_position[word+"_"+str(word_index)] = (x1, y1, z1)+self.word_position.get(word+"_"+str(word_index),(0,0,0))
                     x_old_1 = x1
                     y_old_1 = y1
                     z_old_1 = z1
-                if len(word)>0:
-                    #print("Word+Index Line 759: ",word, word_index)
-                    name_list.append("node_for_word_"+word+"_"+str(word_index))
-                    name_list_frame.append("node_for_word_frame_"+word+"_"+str(word_index))
-                    # use the word-level to determine the framework's height
-                    distance = 4*max(res_key.get(word, [0.5]))*self.zoom_rate
-                    # add some random offset
-                    offset = distance*(random.random()-0.5)
-                    start_position = self.word_position[word+"_"+str(word_index)]
-                    if res_parts[count][1] == 'NOUN':
-                        pos_dict["node_for_word_"+word+"_"+str(word_index)] = (start_position[0],start_position[1],start_position[2]+offset)
-                        pos_dict["node_for_word_frame_"+word+"_"+str(word_index)] =  (start_position[0],start_position[1],start_position[2]+offset)
-                    elif res_parts[count][1] == 'VERB':
-                        pos_dict["node_for_word_"+word+"_"+str(word_index)] = (offset+start_position[0],start_position[1],start_position[2])
-                        pos_dict["node_for_word_frame_"+word+"_"+str(word_index)] = (offset+start_position[0],start_position[1],start_position[2])
-                    else:
-                        pos_dict["node_for_word_"+word+"_"+str(word_index)] = (start_position[0],start_position[1],start_position[2])
-                        pos_dict["node_for_word_frame_"+word+"_"+str(word_index)] = (start_position[0],start_position[1],start_position[2])
+                #print("LIne 818: ",word,"_",word_index)
+
+                #print("Word+Index Line 759: ",word, word_index)
+                name_list.append("node_for_word_"+word+"_"+str(word_index))
+                name_list_frame.append("node_for_word_frame_"+word+"_"+str(word_index))
+                # use the word-level to determine the framework's height
+                distance = 4*max(res_key.get(word, [0.5]))*self.zoom_rate
+                # add some random offset
+                offset = distance*(random.random()-0.5)
+                start_position = self.word_position[word+"_"+str(word_index)]
+                try:
+                    pos = res_parts[count][1]
+                except:
+                    pos = "NOUN"
+                if pos == 'NOUN':
+                    self.word_pos_dict["node_for_word_"+word+"_"+str(word_index)] = (start_position[0],start_position[1],start_position[2]+offset)
+                    self.word_pos_dict["node_for_word_frame_"+word+"_"+str(word_index)] =  (start_position[0],start_position[1],start_position[2]+offset)
+                elif pos == 'VERB':
+                    self.word_pos_dict["node_for_word_"+word+"_"+str(word_index)] = (offset+start_position[0],start_position[1],start_position[2])
+                    self.word_pos_dict["node_for_word_frame_"+word+"_"+str(word_index)] = (offset+start_position[0],start_position[1],start_position[2])
+                else:
+                    self.word_pos_dict["node_for_word_"+word+"_"+str(word_index)] = (start_position[0],start_position[1],start_position[2])
+                    self.word_pos_dict["node_for_word_frame_"+word+"_"+str(word_index)] = (start_position[0],start_position[1],start_position[2])
+
+                self.store_position[word+"_"+str(word_index)] = {}
+                self.store_position[word+"_"+str(word_index)]["word_position"] =  self.word_pos_dict.get("node_for_word_"+word+"_"+str(word_index))
+                self.store_position[word+"_"+str(word_index)]["sub_sentence_position"] =  (x_sub_origin, y_sub_origin,z_sub_origin)
+                self.store_position[word+"_"+str(word_index)]["sentence_position"] =  (x_origin, y_origin,z_origin)
+                self.store_position[word+"_"+str(word_index)]["sentence_index"] =  self.input_sentence_number
+
+                print("Store Position: ", word, word_index,self.store_position[word+"_"+str(word_index)])
+                word_index+=1
+
+                    #print("self.store_position[word+str(word_index)]:",self.store_position[word+"_"+str(word_index)])
+
+                count+=1
 
 
 
-                    count+=1
-                    word_index+=1
 
 
             for node in self.node_for_word.getChildren():
                 if node.getName() in name_list:
                     node.reparentTo(self.node_for_sub_sentence)
-                    pos_new = pos_dict.get(node.getName(),(0,0,0))
+                    pos_new = self.word_pos_dict.get(node.getName(),(0,0,0))
                     print("Node Information: ",pos_new,node.getName() )
                     myInterval_word = node.posInterval(5, Point3(pos_new[0],pos_new[1],pos_new[2]))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
                     mySequence_move.append(myInterval_word)
@@ -873,7 +891,7 @@ class App(ShowBase):
             for node in self.node_for_word_frame.getChildren():
                 if node.getName() in name_list_frame:
                     node.reparentTo(self.node_for_sub_sentence_frame)
-                    pos_new = pos_dict.get(node.getName(),(0,0,0))
+                    pos_new = self.word_pos_dict.get(node.getName(),(0,0,0))
                     myInterval_frame = node.posInterval(5, Point3(pos_new[0],pos_new[1],pos_new[2]))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
                     mySequence_move.append(myInterval_frame)
                     #node.setPos(pos_new[0],pos_new[1],pos_new[2] )
@@ -881,24 +899,97 @@ class App(ShowBase):
 
 
             mySequence_move.start()
+
             print("Sub Origin: ",x_sub_origin, y_sub_origin,z_sub_origin)
             #self.node_for_sub_sentence.setPos(x_sub_origin, y_sub_origin,z_sub_origin)
-            myInterval1 = self.node_for_sub_sentence.posInterval(10, Point3(x_sub_origin, y_sub_origin,z_sub_origin))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
+            myInterval1 = self.node_for_sub_sentence.posInterval(len(sub_word_list), Point3(x_sub_origin, y_sub_origin,z_sub_origin))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
             #self.node_for_sub_sentence_frame.setPos(x_sub_origin, y_sub_origin,z_sub_origin)
 
-            myInterval2 = self.node_for_sub_sentence_frame.posInterval(10, Point3(x_sub_origin, y_sub_origin,z_sub_origin)) #Point3(x_sub_origin, y_sub_origin,z_sub_origin))
+            myInterval2 = self.node_for_sub_sentence_frame.posInterval(len(sub_word_list), Point3(x_sub_origin, y_sub_origin,z_sub_origin)) #Point3(x_sub_origin, y_sub_origin,z_sub_origin))
             myParallel = Parallel(myInterval1, myInterval2)
 
             myParallel.start()
 
-            #myParallel_all = Sequence(mySequence_move,myParallel )
-            #myParallel_all.start()
+        print("All Origin: ",x_origin, y_origin,z_origin)
+
+        myInterval_all_1 = self.node_for_sentence.posInterval(self.sentence_length, Point3(x_origin, y_origin,z_origin))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
+        #self.node_for_sub_sentence_frame.setPos(x_sub_origin, y_sub_origin,z_sub_origin)
+
+        myInterval_all_2 = self.node_for_sentence_frame.posInterval(self.sentence_length, Point3(x_origin, y_origin,z_origin)) #Point3(x_sub_origin, y_sub_origin,z_sub_origin))
+        myParallel_all = Parallel(myInterval_all_1 , myInterval_all_2)
+
+        myParallel_all.start()
+        #myParallel_all = Sequence(mySequence_move,myParallel )
+        #myParallel_all.start()
 
 
-            #print("current Position: ",self.node_for_sub_sentence.getPos() )
-            self.compute = 0
-            self.move_camera = True
+        #print("current Position: ",self.node_for_sub_sentence.getPos() )
+        #self.compute = 0
+        self.move_camera = True
+        self.temperature_previous = self.temperature_current
+        self.sentiment_previous = self.sentiment_current
 
+        # control the overall sentiment of all the in
+        self.sum_sentiment+=sentiment
+        self.sentiment_current = self.sum_sentiment/self.input_sentence_number
+        print("sentiment_current",self.sentiment_current,self.input_sentence_number)
+        self.temperature_current = 6500-6500*self.sentiment_current
+        if self.input_sentence_number==1:
+            self.temperature_previous = self.temperature_current
+            self.sentiment_previous = self.sentiment_current
+
+        self.co_reference_node.removeNode()
+        self.co_reference_node = self.node_for_render.attachNewNode("co_reference_node")
+        self.co_reference_frame = []
+
+        for i in self.co_reference:
+            print("Index: ", i)
+            if len(i)>1:
+                index = self.first_sentence_length+i[0][0]-1
+                word_connect = word_tokenize(self.input_sentence)[index:index+1]
+                print("Searching: ",word_connect[0],"_",str(index) )
+                try:
+                    sentence_position_now = self.store_position.get(word_connect[0]+"_"+str(index))['sentence_position']
+                except:
+                    print("does not find a good result in line 943")
+                    continue
+
+
+                index_pre = word_connect[0]+str(index)
+
+                for j in i[1:]:
+                    index = self.first_sentence_length+j[0]-1
+                    word_connect = word_tokenize(self.input_sentence)[index:index+1]
+                    sentence_position_pre = copy.deepcopy(sentence_position_now)
+                    try:
+
+                        sentence_position_now = self.store_position.get(word_connect[0]+"_"+str(index))['sentence_position']
+                        sentence_index = self.store_position.get(word_connect[0]+"_"+str(index))['sentence_index']
+                    except:
+                        print("does not find a good result")
+                        continue
+
+                    if [index_pre,word_connect[0]+str(index)] in self.rendered_connection:
+
+                        position_edit = copy.deepcopy(sentence_position_now)
+
+                    else:
+                        position_edit = [(sentence_position_pre[0] + sentence_position_now[0])/2, (sentence_position_pre[1] + sentence_position_now[1])/2, (sentence_position_pre[2] + sentence_position_now[2])/2]
+                        self.rendered_connection.append([index_pre,word_connect[0]+str(index)])
+                        test = 0
+                        for i in self.node_for_render.getChildren():
+                            test+=1
+                            if i.getName() == "node_for_sentence_"+str(sentence_index):
+
+                                self.store_position.get(word_connect[0]+str(index))['sentence_position'] =(position_edit[0],position_edit[1],position_edit[2])
+                                myInterval_corr= i.posInterval(5, Point3(position_edit[0],position_edit[1],position_edit[2])) #Point3(x_sub_origin, y_sub_origin,z_sub_origin))
+                                myInterval_corr.start()
+                                print("find sentence: ",i.getName() )
+                                break
+
+                    self.co_reference_frame.append([LVecBase3(sentence_position_pre[0],sentence_position_pre[1], sentence_position_pre[2]),
+                                                    LVecBase3(atan2(position_edit[1]-sentence_position_pre[1], position_edit[0]-sentence_position_pre[0])* 180.0/np.pi, 0,-atan2(position_edit[2]-sentence_position_pre[2], sqrt((position_edit[0]-sentence_position_pre[0])**2+(position_edit[1]-sentence_position_pre[1])**2))* 180.0/np.pi),
+                                                    LVecBase3(sqrt((position_edit[0]-sentence_position_pre[0])**2+(position_edit[1]-sentence_position_pre[1])**2+(position_edit[2]-sentence_position_pre[2])**2), 0.04, 0.04)])
 
 
 
@@ -922,15 +1013,15 @@ class App(ShowBase):
         [nx, ny, nz] = compute_word_vec(word, model, pca2, pca3, pca4, 3)
         # compute the word length
         w = int(max(3,1.5*compute_word_length(word))*self.zoom_rate)
-        self.word_position[word+"_"+str(self.word_index)] = w
+        self.word_length_information[word+"_"+str(self.word_index)] = w
         # add some +/- variance
         i0 = test_positive(nx)
         i1 = test_positive(ny)
         i2 = test_positive(nz)
 
 
-        x1 = 0#self.x_old_1
-        y1 = 0#self.y_old_1
+        x1 = self.x_old_1
+        y1 = self.y_old_1
         z1 = pitch_word
         #print("z1",x1,y1,z1)
 
@@ -1289,6 +1380,7 @@ class App(ShowBase):
         node_in.setMaterial(self.myMaterialIn)
         self.node_dict[self.word_index].append(node_in)
         self.word_position[word+"_"+str(self.word_index)] = (x1,y1,z1)
+        #print("LIne 1353: ",word,"_",self.word_index)
 
 
         for node in self.node_dict[self.word_index]:
