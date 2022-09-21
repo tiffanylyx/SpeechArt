@@ -76,7 +76,7 @@ if not os.path.exists('./texture'):
     os.makedirs('./texture')
 
 # change the window size
-loadPrcFileData('', 'win-size 1400 700')
+loadPrcFileData('', 'win-size 1980 1200')
 os.environ["CURL_CA_BUNDLE"]=""
 
 load_prc_file_data("", """
@@ -180,7 +180,7 @@ class App(ShowBase):
         # create a window and set up everything we need for rendering into it.
         ShowBase.__init__(self)
         self.keyboard = False
-        #self.shader = Shader.load(Shader.SL_GLSL, "models/lighting.vert", "models/lighting.frag")
+        self.shader = Shader.load(Shader.SL_GLSL, "models/lighting.vert", "models/lighting.frag")
 
         # set up basic functions
         self.setBackgroundColor(0.7,0.7,0.7)
@@ -240,13 +240,17 @@ class App(ShowBase):
         #self.directionalLight.setColor((1, 1, 1, 1))
         self.directionalLight.setShadowCaster(True, 2048, 2048)
         self.directionalLight.get_lens().set_near_far(1, 100)
-        self.directionalLight.get_lens().set_film_size(20, 40)
-        #self.directionalLight.show_frustum()
-        self.directionalLight.set_color_temperature(6000)
+        self.directionalLight.get_lens().set_film_size(40, 80)
+        self.directionalLight.show_frustum()
+        self.directionalLight.setColor((250/255, 255/255, 200/255,1 ))
 
         self.directionalLight.color = self.directionalLight.color * 4
         self.directionalLightNP = render.attachNewNode(self.directionalLight)
-        self.directionalLightNP.look_at(0, 0, 0)
+        self.directionalLightNP.lookAt(0, 0, 0)
+        self.directionalLightNP.setPos(10, -10, -10)
+
+        self.directionalLightNP.hprInterval(10.0, (self.directionalLightNP.get_h() - 360, self.directionalLightNP.get_p() - 360, self.directionalLightNP.get_r() - 360), bakeInStart=True).loop()
+
         # This light is facing forwards, away from the camera.
         #self.directionalLightNP.setHpr(0, -20, 0)
         render.setLight(self.directionalLightNP)
@@ -266,7 +270,8 @@ class App(ShowBase):
         render.setLight(self.directionalLightNP2)
         '''
         render.setAntialias(AntialiasAttrib.MAuto)
-        #render.set_shader(self.shader)
+        render.set_shader(self.shader)
+        #render.setShaderAuto()
 
         # control the event
         self.accept("escape", sys.exit)
@@ -295,17 +300,19 @@ class App(ShowBase):
         self.count = 0
         self.node_for_render = render.attachNewNode("node_for_render")
         self.node_for_render_sentence = render.attachNewNode("node_for_render_sentence")
+        self.node_for_render_word = render.attachNewNode("node_for_render_word")
         self.co_reference_node = self.node_for_render.attachNewNode("co_reference_node")
         self.node_for_render_node = render.attachNewNode("node_for_render_node")
-        self.node_for_sentence = self.node_for_render_sentence.attachNewNode("node_for_sentence")
-        self.node_for_sentence_frame = self.node_for_render_sentence.attachNewNode("node_for_"+"frame")
-        self.node_for_word = self.node_for_render.attachNewNode("node_for_word")
-        self.node_for_word_frame = self.node_for_render_sentence.attachNewNode("node_for_word_frame")
+        #self.node_for_sentence = self.node_for_render_sentence.attachNewNode("node_for_sentence")
+        #self.node_for_sentence_frame = self.node_for_render_sentence.attachNewNode("node_for_"+"frame")
+        self.node_for_word = self.node_for_render_word.attachNewNode("node_for_word")
+        self.node_for_word_frame = self.node_for_render_word.attachNewNode("node_for_word_frame")
 
 
         self.render_index = 0
 
         self.input_sentence = ''
+        self.input_sentence_word_list = {}
         self.input_sentence_list = []
         self.distance_offset = 0.3
         self.render_next = False
@@ -338,20 +345,19 @@ class App(ShowBase):
         self.pos_list = {}
 
         self.myMaterialIn = Material()
-        self.myMaterialIn.setAmbient((1, 1, 1, 0.5))
-        self.myMaterialIn.setShininess(1) # Make this material shiny
-        self.myMaterialIn.setSpecular((1, 1, 1, 1)) # Make this material blue
+        self.myMaterialIn.setShininess(100) # Make this material shiny
+        self.myMaterialIn.setAmbient((30, 0, 0, 0.5))
+        self.myMaterialIn.setSpecular((3, 2*170/255, 2*254/255,1)) # Make this material blue
 
         self.myMaterialSurface = Material()
-        self.myMaterialSurface.setAmbient((1, 1, 1, 1))
-        self.myMaterialSurface.setShininess(10) # Make this material shiny
-        self.myMaterialSurface.setSpecular((1, 1, 1, 1)) # Make this material blue
-
+        self.myMaterialSurface.setShininess(100) # Make this material shiny
+        self.myMaterialSurface.setAmbient((1, 1, 1, 0.5))
+        self.myMaterialSurface.setSpecular((1,1,100, 1))
 
         self.myMaterial_frame = Material()
-        self.myMaterial_frame.setShininess(10) # Make this material shiny
-        self.myMaterial_frame.setAmbient((0,0,50,1)) # Make this material shiny
-        self.myMaterial_frame.setSpecular((1, 1, 1, 1)) # Make this material blue
+        self.myMaterial_frame.setShininess(100) # Make this material shiny
+        #self.myMaterial_frame.setAmbient((0,0,1,1)) # Make this material shiny
+        self.myMaterial_frame.setSpecular((0, 1, 0, 1)) # Make this material blue
 
 
         self.temperature_previous = 0
@@ -561,16 +567,18 @@ class App(ShowBase):
         round = 0
         while not messages.empty():
 
+            try:
+                data = stream.read(chunk)
+                rms = audioop.rms(data, 2)
 
-            data = stream.read(chunk)
-            rms = audioop.rms(data, 2)
-
-            if rms>150:
-                frames.append(data)
+                if rms>80:
+                    frames.append(data)
                 if len(frames) >= RECORD_FRACTURE*(FRAME_RATE * RECORD_SECONDS) / chunk:
                     recordings.put(frames.copy())
                     frames = frames[int(len(frames)/2):]
                     under_length = False
+            except:
+                continue
 
         stream.stop_stream()
         stream.close()
@@ -741,7 +749,7 @@ class App(ShowBase):
         self.input_sentence_number+=1
         mySequence_move = Parallel()
         sentence = pre_process_sentence(sentence)
-        self.input_sentence = self.input_sentence+" " + sentence
+
         self.input_sentence_list.append(sentence)
 
         print("Whole Sentence: ", sentence)
@@ -758,8 +766,7 @@ class App(ShowBase):
 
         sentiment = compute_sent_sentiment(sentence)
         sent_vect = compute_sent_vec(sentence, model_sentence,pca3_sentenceVec)
-        self.co_reference = compute_co_reference(self.input_sentence)
-        print("Input Sentence: ", self.input_sentence)
+
 
 
         self.x_origin_pre = copy.deepcopy(self.x_origin)
@@ -868,7 +875,9 @@ class App(ShowBase):
                 self.store_position[word+"_"+str(word_index)]["sentence_position"] =  (x_origin, y_origin,z_origin)
                 self.store_position[word+"_"+str(word_index)]["sentence_index"] =  self.input_sentence_number
 
-                print("Store Position: ", word, word_index,self.store_position[word+"_"+str(word_index)])
+                #print("Store Position: ", word, word_index,self.store_position[word+"_"+str(word_index)])
+                self.input_sentence_word_list[word_index] = word
+
                 word_index+=1
 
                     #print("self.store_position[word+str(word_index)]:",self.store_position[word+"_"+str(word_index)])
@@ -932,64 +941,78 @@ class App(ShowBase):
         # control the overall sentiment of all the in
         self.sum_sentiment+=sentiment
         self.sentiment_current = self.sum_sentiment/self.input_sentence_number
-        print("sentiment_current",self.sentiment_current,self.input_sentence_number)
         self.temperature_current = 6500-6500*self.sentiment_current
         if self.input_sentence_number==1:
             self.temperature_previous = self.temperature_current
             self.sentiment_previous = self.sentiment_current
 
+        self.input_sentence = ''
+
+        for key in self.input_sentence_word_list:
+            self.input_sentence = self.input_sentence+' '+self.input_sentence_word_list.get(key)
+        self.co_reference = compute_co_reference(self.input_sentence)
+
         self.co_reference_node.removeNode()
         self.co_reference_node = self.node_for_render.attachNewNode("co_reference_node")
         self.co_reference_frame = []
 
+
         for i in self.co_reference:
-            print("Index: ", i)
             if len(i)>1:
-                index = self.first_sentence_length+i[0][0]-1
-                word_connect = word_tokenize(self.input_sentence)[index:index+1]
-                print("Searching: ",word_connect[0],"_",str(index) )
+                index = i[0][0]-1
+                word_connect = self.input_sentence_word_list.get(index)
+                print(index,word_connect)
+                #print("Searching: ",word_connect[0],"_",str(index) )
                 try:
-                    sentence_position_now = self.store_position.get(word_connect[0]+"_"+str(index))['sentence_position']
+                    sentence_position_now = self.store_position.get(word_connect+"_"+str(index))['sentence_position']
+                    word_position_now = self.store_position.get(word_connect+"_"+str(index))['word_position']
+                    sub_sentence_position_now = self.store_position.get(word_connect+"_"+str(index))['sub_sentence_position_now']
+                    start_position_now = sentence_position_now+word_position_now+sub_sentence_position_now
                 except:
                     print("does not find a good result in line 943")
                     continue
 
 
-                index_pre = word_connect[0]+str(index)
+                index_pre = word_connect+str(index)
 
                 for j in i[1:]:
-                    index = self.first_sentence_length+j[0]-1
-                    word_connect = word_tokenize(self.input_sentence)[index:index+1]
+                    index = j[0]-1
+                    word_connect =self.input_sentence_word_list.get(index)
+                    print("FIND PAIR: ",index, word_connect)
                     sentence_position_pre = copy.deepcopy(sentence_position_now)
                     try:
-
-                        sentence_position_now = self.store_position.get(word_connect[0]+"_"+str(index))['sentence_position']
-                        sentence_index = self.store_position.get(word_connect[0]+"_"+str(index))['sentence_index']
+                        sentence_position_now = self.store_position.get(word_connect+"_"+str(index))['sentence_position']
+                        sentence_index = self.store_position.get(word_connect+"_"+str(index))['sentence_index']
                     except:
                         print("does not find a good result")
                         continue
 
-                    if [index_pre,word_connect[0]+str(index)] in self.rendered_connection:
+                    if [index_pre,word_connect+str(index)] in self.rendered_connection:
 
                         position_edit = copy.deepcopy(sentence_position_now)
 
                     else:
                         position_edit = [(sentence_position_pre[0] + sentence_position_now[0])/2, (sentence_position_pre[1] + sentence_position_now[1])/2, (sentence_position_pre[2] + sentence_position_now[2])/2]
-                        self.rendered_connection.append([index_pre,word_connect[0]+str(index)])
+                        self.rendered_connection.append([index_pre,word_connect+str(index)])
                         test = 0
-                        for i in self.node_for_render.getChildren():
+                        for i in self.node_for_render_sentence.getChildren():
                             test+=1
                             if i.getName() == "node_for_sentence_"+str(sentence_index):
 
-                                self.store_position.get(word_connect[0]+str(index))['sentence_position'] =(position_edit[0],position_edit[1],position_edit[2])
+                                self.store_position.get(word_connect+str(index))['sentence_position'] =(position_edit[0],position_edit[1],position_edit[2])
                                 myInterval_corr= i.posInterval(5, Point3(position_edit[0],position_edit[1],position_edit[2])) #Point3(x_sub_origin, y_sub_origin,z_sub_origin))
                                 myInterval_corr.start()
                                 print("find sentence: ",i.getName() )
                                 break
+                    frame12 = self.loader.loadModel("models/box")
+                    frame12.setPosHprScale(LVecBase3(start_position_now[0],start_position_now[1], start_position_now[2]),
+                                           LVecBase3(atan2(position_edit[1]-start_position_now[1], position_edit[0]-start_position_now[0])* 180.0/np.pi, 0,-atan2(position_edit[2]-start_position_now[2], sqrt((position_edit[0]-start_position_now[0])**2+(position_edit[1]-start_position_now[1])**2))* 180.0/np.pi),
+                                           LVecBase3(sqrt((position_edit[0]-start_position_now[0])**2+(position_edit[1]-start_position_now[1])**2+(position_edit[2]-start_position_now[2])**2), 0.1, 0.1))
+                    frame12.setTextureOff(1)
+                    frame12.setTransparency(1)
+                    frame12.setColorScale(0, 0.1, 0.2,0.9)
+                    frame12.reparentTo(self.co_reference_node)
 
-                    self.co_reference_frame.append([LVecBase3(sentence_position_pre[0],sentence_position_pre[1], sentence_position_pre[2]),
-                                                    LVecBase3(atan2(position_edit[1]-sentence_position_pre[1], position_edit[0]-sentence_position_pre[0])* 180.0/np.pi, 0,-atan2(position_edit[2]-sentence_position_pre[2], sqrt((position_edit[0]-sentence_position_pre[0])**2+(position_edit[1]-sentence_position_pre[1])**2))* 180.0/np.pi),
-                                                    LVecBase3(sqrt((position_edit[0]-sentence_position_pre[0])**2+(position_edit[1]-sentence_position_pre[1])**2+(position_edit[2]-sentence_position_pre[2])**2), 0.04, 0.04)])
 
 
 
@@ -1121,8 +1144,8 @@ class App(ShowBase):
         frame1.setTextureOff(1)
         frame1.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z1-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
         frame1.setTransparency(1)
-        frame1.setColorScale(0, 0.1, 0.2,0.9)
-        #frame1.setShaderAuto()
+        frame1.setColorScale(0, 0.1, 0.2,1)
+
 
         self.node_dict_frame[self.word_index].append(frame1)
 
@@ -1130,78 +1153,78 @@ class App(ShowBase):
         frame2.setPosHprScale(LVecBase3(x2-x_origin,y2-y_origin,z2-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
         frame2.setTextureOff(1)
         frame2.setTransparency(1)
-        frame2.setColorScale(0, 0.1, 0.2,0.9)
-        #frame2.setShaderAuto()
+        frame2.setColorScale(0, 0.1, 0.2,1)
+
         self.node_dict_frame[self.word_index].append(frame2)
 
         frame3 = self.loader.loadModel("models/box")
         frame3.setPosHprScale(LVecBase3(x_move1-x_origin,y_move1-y_origin,z1-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
         frame3.setTextureOff(1)
         frame3.setTransparency(1)
-        frame3.setColorScale(0, 0.1, 0.2,0.9)
+        frame3.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame3)
 
         frame4 = self.loader.loadModel("models/box")
         frame4.setPosHprScale(LVecBase3(x_move2-x_origin,y_move2-y_origin,z2-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
         frame4.setTextureOff(1)
         frame4.setTransparency(1)
-        frame4.setColorScale(0, 0.1, 0.2,0.9)
+        frame4.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame4)
 
         frame5 = self.loader.loadModel("models/box")
         frame5.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z1-z_origin),LVecBase3(atan2(y_move1-y1, x_move1-x1)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
         frame5.setTextureOff(1)
         frame5.setTransparency(1)
-        frame5.setColorScale(0, 0.1, 0.2,0.9)
+        frame5.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame5)
 
         frame6 = self.loader.loadModel("models/box")
         frame6.setPosHprScale(LVecBase3(x2-x_origin,y2-y_origin,z2-z_origin),LVecBase3(atan2(y_move2-y2, x_move2-x2)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
         frame6.setTextureOff(1)
         frame6.setTransparency(1)
-        frame6.setColorScale(0, 0.1, 0.2,0.9)
+        frame6.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame6)
 
         frame7 = self.loader.loadModel("models/box")
         frame7.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z3-z_origin),LVecBase3(atan2(y_move1-y1, x_move1-x1)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
         frame7.setTextureOff(1)
         frame7.setTransparency(1)
-        frame7.setColorScale(0, 0.1, 0.2,0.6)
+        frame7.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame7)
 
         frame8 = self.loader.loadModel("models/box")
         frame8.setPosHprScale(LVecBase3(x2-x_origin,y2-y_origin,z4-z_origin),LVecBase3(atan2(y_move2-y2, x_move2-x2)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
         frame8.setTextureOff(1)
         frame8.setTransparency(1)
-        frame8.setColorScale(0, 0.1, 0.2,0.9)
+        frame8.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame8)
 
         frame9 = self.loader.loadModel("models/box")
         frame9.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z1-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
         frame9.setTextureOff(1)
         frame9.setTransparency(1)
-        frame9.setColorScale(0, 0.1, 0.2,0.9)
+        frame9.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame9)
 
         frame10 = self.loader.loadModel("models/box")
         frame10.setPosHprScale(LVecBase3(x3-x_origin,y3-y_origin,z3-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
         frame10.setTextureOff(1)
         frame10.setTransparency(1)
-        frame10.setColorScale(0, 0.1, 0.2,0.9)
+        frame10.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame10)
 
         frame11 = self.loader.loadModel("models/box")
         frame11.setPosHprScale(LVecBase3(x_move1-x_origin, y_move1-y_origin, z1-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
         frame11.setTextureOff(1)
         frame11.setTransparency(1)
-        frame11.setColorScale(0, 0.1, 0.2,0.9)
+        frame11.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame11)
 
         frame12 = self.loader.loadModel("models/box")
         frame12.setPosHprScale(LVecBase3(x_move1-x_origin, y_move1-y_origin, z3-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
         frame12.setTextureOff(1)
         frame12.setTransparency(1)
-        frame12.setColorScale(0, 0.1, 0.2,0.9)
+        frame12.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame12)
 
 
@@ -1252,7 +1275,7 @@ class App(ShowBase):
             node_f.setAttrib(DepthOffsetAttrib.make(0))
             node_f.setTexture(testTexture)
             node_f.setMaterial(self.myMaterialSurface)
-            #node_f.setShaderAuto()
+
             self.node_dict[self.word_index].append(node_f)
             # compute the back surface of the framework
             square_b = makeQuad(x_move1, y_move1, z1, x_move2, y_move2, z2, x_move1, y_move1, z3, x_move2, y_move2, z4, test_color,[x1, y1, z1],1)
