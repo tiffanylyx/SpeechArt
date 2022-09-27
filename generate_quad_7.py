@@ -104,7 +104,6 @@ import pyaudio
 p = pyaudio.PyAudio()
 for i in range(p.get_device_count()):
     print(p.get_device_info_by_index(i))
-
 p.terminate()
 
 CHANNELS = 1
@@ -191,7 +190,6 @@ class App(ShowBase):
         self.camLens.setAspectRatio(2)
         self.camLens.setFar(100)
         self.taskMgr.add(self.spinCameraTask, "SpinCameraTask")
-        #self.taskMgr.add(self.moving_structure,"Moving Structure")
         self.taskMgr.add(self.change_light_temperature,"Change Light Temperature")
         self.taskMgr.add(self.recordingTask,"Listen Mic Task")
         #self.taskMgr.add(self.render_next_task, "Render Next Task")
@@ -220,13 +218,6 @@ class App(ShowBase):
         self.sayHint = self.makeStatusLabel("You can say something",0)
 
 
-
-        #self.entry = DirectEntry(text = "", scale=.05, command=self.inputText, pos=(-1.95, -0.1,0.85),
-        #initialText="Type Something", numLines = 4, focus=1, focusInCommand=self.clearText,width = 15)
-
-
-
-
         self.alight = AmbientLight('alight')
         self.alight.setColor((1,1,1,1))
         #self.alight.setColor(VBase4(skycol * 0.04, 1))
@@ -249,26 +240,12 @@ class App(ShowBase):
         self.directionalLightNP.lookAt(0, 0, 0)
         self.directionalLightNP.setPos(10, -10, -10)
 
-        self.directionalLightNP.hprInterval(10.0, (self.directionalLightNP.get_h() - 360, self.directionalLightNP.get_p() - 360, self.directionalLightNP.get_r() - 360), bakeInStart=True).loop()
+        self.directionalLightNP.hprInterval(20.0, (self.directionalLightNP.get_h() - 360, self.directionalLightNP.get_p() - 360, self.directionalLightNP.get_r() - 360), bakeInStart=True).loop()
 
         # This light is facing forwards, away from the camera.
         #self.directionalLightNP.setHpr(0, -20, 0)
         render.setLight(self.directionalLightNP)
-        '''
-        self.directionalLight2 = DirectionalLight('directionalLight2')
-        #self.directionalLight2.setColor((1, 1, 1, 1))
-        self.directionalLight2.setShadowCaster(True, 2048, 2048)
-        self.directionalLight2.get_lens().set_near_far(1, 30)
-        self.directionalLight2.get_lens().set_film_size(20, 40)
-        self.directionalLight2.show_frustum()
 
-        self.directionalLightNP2 = render.attachNewNode(self.directionalLight2)
-        self.directionalLightNP2.look_at(0, 0, 0)
-        #self.directionalLightNP2.set_shader(self.shader)
-        # This light is facing forwards, away from the camera.
-        #self.directionalLightNP2.setHpr(20, 0, 0)
-        render.setLight(self.directionalLightNP2)
-        '''
         render.setAntialias(AntialiasAttrib.MAuto)
         render.set_shader(self.shader)
         #render.setShaderAuto()
@@ -286,6 +263,10 @@ class App(ShowBase):
         self.accept("i", self.hide_instruction)
         self.accept("t", self.hide_texture)
         self.accept("n", self.hide_node)
+
+        self.accept("a", self.change_ambient_material)
+        self.accept("d", self.change_specular_material)
+        self.accept("e", self.change_shining_material)
 
 
         self.node_dict = {}
@@ -338,25 +319,36 @@ class App(ShowBase):
         self.hide_instruction = 1
         #self.instruction_font = self.loader.loadFont('arial.egg')
 
-        self.moving = False
-        self.compute1 = 0
+
+
         self.move_sentence_index = {}
         self.co_reference_frame = []
         self.pos_list = {}
 
         self.myMaterialIn = Material()
         self.myMaterialIn.setShininess(100) # Make this material shiny
-        self.myMaterialIn.setAmbient((30, 0, 0, 0.5))
-        self.myMaterialIn.setSpecular((3, 2*170/255, 2*254/255,1)) # Make this material blue
+        self.myMaterialIn.setAmbient((0.7, 0.7, 0.7, 0.5))
+        self.myMaterialIn.setSpecular((1.5, 1.5, 1.5*255/165,1)) # Make this material blue
 
         self.myMaterialSurface = Material()
-        self.myMaterialSurface.setShininess(100) # Make this material shiny
+        self.myMaterialSurface.setShininess(20) # Make this material shiny
         self.myMaterialSurface.setAmbient((1, 1, 1, 0.5))
-        self.myMaterialSurface.setSpecular((1,1,100, 1))
+        self.myMaterialSurface.setSpecular((1.5, 1.5*255/165,1.5,  1))
+
+        self.myMaterialAnswerSurface = Material()
+        self.myMaterialAnswerSurface.setShininess(100) # Make this material shiny
+        self.myMaterialAnswerSurface.setAmbient((0,0,0, 0.5))
+        self.myMaterialAnswerSurface.setSpecular((0,0,0, 1))
+
+        self.myMaterialAnswerIn = Material()
+        self.myMaterialAnswerIn.setShininess(100) # Make this material shiny
+        self.myMaterialAnswerIn.setAmbient((1,1,1, 0.5))
+        self.myMaterialAnswerIn.setSpecular((1,1,1, 1))
+
 
         self.myMaterial_frame = Material()
         self.myMaterial_frame.setShininess(100) # Make this material shiny
-        #self.myMaterial_frame.setAmbient((0,0,1,1)) # Make this material shiny
+        self.myMaterial_frame.setAmbient((0,0,5,1)) # Make this material shiny
         self.myMaterial_frame.setSpecular((0, 1, 0, 1)) # Make this material blue
 
 
@@ -419,6 +411,10 @@ class App(ShowBase):
 
         self.sentence_length = 0
         self.first_sentence_length = 0
+
+        self.create = False
+        self.answer_number = 0
+        self.move_pixel = 0
         #self.pitch_res = []
     def camera_control(self):
         if self.keyboard:
@@ -493,10 +489,26 @@ class App(ShowBase):
             self.show_node = 0
             self.node_for_render_node.show()
 
+    def change_ambient_material(self):
+        color = self.myMaterialIn.getAmbient()
+        print("Ambient Color: ", color)
+        self.myMaterialIn.setAmbient((color[0],color[1]+1, color[2], color[3]))
+
+    def change_specular_material(self):
+        color = self.myMaterialIn.getSpecular()
+        print("Specular Color: ", color)
+        self.myMaterialIn.setSpecular((color[0],color[1], color[2]+1, color[3]))
+
+    def change_shining_material(self):
+        color = self.myMaterialIn.getShininess()
+        print("Shininess Color: ", color)
+        self.myMaterialIn.setShininess(color+1)
+
 
 
         # control the camera movement
     def spinCameraTask(self, task):
+        changeRate = 1000
         R = 0
         if self.move_camera:
 
@@ -506,8 +518,8 @@ class App(ShowBase):
             if self.camera_mode == 0:
                 # Choice 1: Fully automated camera (moving the image center and rotate)
 
-                self.camera.setX(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000+self.camera_distance * sin(angleRadians))
-                self.camera.setY(self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/1000-self.camera_distance * cos(angleRadians))
+                self.camera.setX(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/changeRate+self.camera_distance * sin(angleRadians))
+                self.camera.setY(self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/changeRate-self.camera_distance * cos(angleRadians))
                 self.camera.setZ(self.z_origin+self.camera_z)
                                    #self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000+8)
                 self.camera.setHpr(angleDegrees, 0, R)
@@ -515,16 +527,16 @@ class App(ShowBase):
             elif self.camera_mode == 1:
                 # Choice 2: Half automated camera (moving the image center)
                 #self.camera.setZ(self.z_origin+8)
-                self.camera.lookAt(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/1000,
-                                   self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/1000,
-                                   self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000)
+                self.camera.lookAt(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/changeRate,
+                                   self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/changeRate,
+                                   self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/changeRate)
                 R = self.camera.getR()
 
-            if self.compute<500:
+            if self.compute<changeRate/2:
                 self.compute += 2
-            elif self.compute<1000:
+            elif self.compute<changeRate:
                 self.compute += 1
-            elif self.compute==1000:
+            elif self.compute==changeRate:
                 R = self.camera.getR()
         return Task.cont
 
@@ -555,6 +567,7 @@ class App(ShowBase):
         return Task.done
 
     def record_microphone(self,chunk=1024):
+        print("Recording")
 
         p = pyaudio.PyAudio()
 
@@ -569,7 +582,36 @@ class App(ShowBase):
 
             try:
                 data = stream.read(chunk)
+
+                dataInt = struct.unpack(str(chunk) + 'h', data)
+                dataFFT = np.abs(np.fft.fft(dataInt))*2/(11000*chunk)
+                if self.create==False:
+                    print("Here 588")
+                    lines = LineSegs()
+                    lines.setColor(1,0,0,1)
+                    lines.moveTo(0,0,0)
+                    for x,z in enumerate(dataFFT[:int(len(dataFFT)/2)]):
+                        lines.drawTo(x/10,0,z*30)
+                        #lines.setVertex(x,x/4,0,z*10)
+
+                    node = lines.create()
+
+                    nodePath = NodePath(node)
+
+                    nodePath.reparentTo(render)
+                    self.create=True
+                    self.move_pixel+=0.05
+
+                else:
+
+                    for x,z in enumerate(dataFFT[:int(len(dataFFT)/2)]):
+                        #lines.drawTo(x/4,0,z*10)
+                        lines.setVertex(x,self.move_pixel+x/10,0,z*30)
+                    #self.move_pixel+=0.05
+
+
                 rms = audioop.rms(data, 2)
+                lines.setThickness(rms/60)
 
                 if rms>80:
                     frames.append(data)
@@ -586,7 +628,9 @@ class App(ShowBase):
 
     def speech_recognition(self,text_all,pun,recordCount):
 
+
         while not messages.empty():
+            print("Recognition")
             frames = recordings.get()
             self.recordCount +=1
 
@@ -619,7 +663,6 @@ class App(ShowBase):
                 self.text_old = copy.deepcopy(self.text_all)
 
                 self.text_all, self.text_add = self.check(self.text_all,MyText )
-
 
                 #if self.recordCount %2==0:
                 output_json = pun(self.text_all)
@@ -688,12 +731,7 @@ class App(ShowBase):
                 self.sentence_with_punctuation_new.remove(" ")
             if "" in self.sentence_with_punctuation_new:
                 self.sentence_with_punctuation_new.remove("")
-            if len(self.sentence_with_punctuation_new) == 1:
-                first_sentence = self.sentence_with_punctuation_new[0]
-                first_sentence = pre_process_sentence(first_sentence)
-                sentence_length = len(word_tokenize(first_sentence))
-                self.first_sentence_length = sentence_length
-                print("self.first_sentence_length: ", self.first_sentence_length)
+
 
             if len(self.sentence_with_punctuation_new)>1:
                 self.last_sentence_with_punctuation_new = self.sentence_with_punctuation_new[-2]
@@ -733,10 +771,14 @@ class App(ShowBase):
                             self.process_sentence(self.last_sentence_with_punctuation, self.this_sentence_word_structure,start_index)
 
 
-                    # generate dialogue
+                            # generate dialogue
 
-                    answer = generate_conversation(self.last_sentence_with_punctuation,chatbot)
-                    self.generateAnswer.setText("Generated Answer: "+answer)
+
+                            answer = generate_conversation(self.last_sentence_with_punctuation,chatbot)
+                            word_list = nltk.word_tokenize(answer)
+                            if len(word_list)>1:
+                                self.generateAnswer.setText("Generated Answer: "+answer)
+                                self.process_answer(answer)
 
 
 
@@ -749,6 +791,7 @@ class App(ShowBase):
         self.input_sentence_number+=1
         mySequence_move = Parallel()
         sentence = pre_process_sentence(sentence)
+        #answer = generate_conversation(sentence,chatbot)
 
         self.input_sentence_list.append(sentence)
 
@@ -766,8 +809,6 @@ class App(ShowBase):
 
         sentiment = compute_sent_sentiment(sentence)
         sent_vect = compute_sent_vec(sentence, model_sentence,pca3_sentenceVec)
-
-
 
         self.x_origin_pre = copy.deepcopy(self.x_origin)
         self.y_origin_pre = copy.deepcopy(self.y_origin)
@@ -808,7 +849,6 @@ class App(ShowBase):
         start_position = (0,0,0)
         # process the subsentence (NP and VP)
         for sub_sentence in sub_sentences:
-            print("Sub Sentence: ", sub_sentence)
             self.node_for_sub_sentence = self.node_for_sentence.attachNewNode("node_for_sub_sentence_"+sub_sentence)
             self.node_for_sub_sentence_frame = self.node_for_sentence_frame.attachNewNode("node_for_sub_sentence_frame"+sub_sentence)
 
@@ -845,9 +885,6 @@ class App(ShowBase):
                     x_old_1 = x1
                     y_old_1 = y1
                     z_old_1 = z1
-                #print("LIne 818: ",word,"_",word_index)
-
-                #print("Word+Index Line 759: ",word, word_index)
                 name_list.append("node_for_word_"+word+"_"+str(word_index))
                 name_list_frame.append("node_for_word_frame_"+word+"_"+str(word_index))
                 # use the word-level to determine the framework's height
@@ -895,21 +932,18 @@ class App(ShowBase):
                     print("Node Information: ",pos_new,node.getName() )
                     myInterval_word = node.posInterval(5, Point3(pos_new[0],pos_new[1],pos_new[2]))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
                     mySequence_move.append(myInterval_word)
-                    #node.setPos(pos_new[0],pos_new[1],pos_new[2])
-                    #node.setPos(pos_new[0],pos_new[1],pos_new[2] )
+
             for node in self.node_for_word_frame.getChildren():
                 if node.getName() in name_list_frame:
                     node.reparentTo(self.node_for_sub_sentence_frame)
                     pos_new = self.word_pos_dict.get(node.getName(),(0,0,0))
                     myInterval_frame = node.posInterval(5, Point3(pos_new[0],pos_new[1],pos_new[2]))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
                     mySequence_move.append(myInterval_frame)
-                    #node.setPos(pos_new[0],pos_new[1],pos_new[2] )
 
 
 
             mySequence_move.start()
 
-            print("Sub Origin: ",x_sub_origin, y_sub_origin,z_sub_origin)
             #self.node_for_sub_sentence.setPos(x_sub_origin, y_sub_origin,z_sub_origin)
             myInterval1 = self.node_for_sub_sentence.posInterval(len(sub_word_list), Point3(x_sub_origin, y_sub_origin,z_sub_origin))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
             #self.node_for_sub_sentence_frame.setPos(x_sub_origin, y_sub_origin,z_sub_origin)
@@ -919,8 +953,6 @@ class App(ShowBase):
 
             myParallel.start()
 
-        print("All Origin: ",x_origin, y_origin,z_origin)
-
         myInterval_all_1 = self.node_for_sentence.posInterval(self.sentence_length, Point3(x_origin, y_origin,z_origin))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
         #self.node_for_sub_sentence_frame.setPos(x_sub_origin, y_sub_origin,z_sub_origin)
 
@@ -928,12 +960,18 @@ class App(ShowBase):
         myParallel_all = Parallel(myInterval_all_1 , myInterval_all_2)
 
         myParallel_all.start()
-        #myParallel_all = Sequence(mySequence_move,myParallel )
-        #myParallel_all.start()
 
 
-        #print("current Position: ",self.node_for_sub_sentence.getPos() )
-        #self.compute = 0
+        '''
+        word_list = nltk.word_tokenize(answer)
+        if len(word_list)>1:
+            self.generateAnswer.setText("Generated Answer: "+answer)
+            self.process_answer(answer)
+        '''
+
+
+
+
         self.move_camera = True
         self.temperature_previous = self.temperature_current
         self.sentiment_previous = self.sentiment_current
@@ -950,6 +988,7 @@ class App(ShowBase):
 
         for key in self.input_sentence_word_list:
             self.input_sentence = self.input_sentence+' '+self.input_sentence_word_list.get(key)
+        '''
         self.co_reference = compute_co_reference(self.input_sentence)
 
         self.co_reference_node.removeNode()
@@ -1013,7 +1052,7 @@ class App(ShowBase):
                     frame12.setColorScale(0, 0.1, 0.2,0.9)
                     frame12.reparentTo(self.co_reference_node)
 
-
+        '''
 
 
 
@@ -1400,6 +1439,7 @@ class App(ShowBase):
         node_in.setColorScale(1,1,1,howOpaque)
         #node_in.setTwoSided(True)
         node_in.setAttrib(DepthOffsetAttrib.make(1))
+
         node_in.setMaterial(self.myMaterialIn)
         self.node_dict[self.word_index].append(node_in)
         self.word_position[word+"_"+str(self.word_index)] = (x1,y1,z1)
@@ -1422,9 +1462,243 @@ class App(ShowBase):
 
         self.keyboard = True
         self.pos_list = {}
-        #self.directionalLightNP.look_at(self.x_origin, self.y_origin, self.z_origin)
-        #self.directionalLightNP2.look_at(self.x_origin, self.y_origin, self.z_origin)
 
+
+    def process_answer(self, answer):
+        print("Process Answer: ", answer)
+        if 1>0:
+
+            self.node_for_answer = self.node_for_render.attachNewNode("node_for_answer_"+str(self.answer_number))
+            self.answer_number += 1
+
+            node_dict = {}
+            node_dict_frame = {}
+            # get input sentence
+            sentence = pre_process_sentence(answer)
+
+            # compute the time difference between two sentence input
+            now_time = time.time()
+            time_period = now_time-self.previous_time
+
+            # compute the 3D sentence vector of the input sentence
+            sent_vect = compute_sent_vec(sentence, model_sentence,pca3_sentenceVec)
+
+            # compute the starting position of the new structure
+            [x_origin, y_origin,z_origin] = solve_point_on_vector(0,0,0, time_period*self.distance_offset, sent_vect[0],sent_vect[1], sent_vect[2])
+
+            if z_origin>1:
+                z_origin = random.random()
+            elif z_origin<-1:
+                z_origin = -random.random()
+
+            #self.z_origin = z_origin
+
+            # seperate the sentence into word list
+            word_list = nltk.word_tokenize(sentence)
+
+            sentiment = compute_sent_sentiment(sentence)
+
+
+            # initiate variables
+            x_center = 0
+            y_center = 0
+            z_center = 0
+            points = []
+            count = 0
+
+            x_old_1 = x_origin
+            y_old_1 = y_origin
+            z_old_1 = z_origin
+
+            for word in word_list:
+                node_dict[count] = []
+                node_dict_frame[count] = []
+                if len(word)==0:
+                    continue
+                syllables = compute_syllables(word,d)
+
+                [nx, ny, nz] = compute_word_vec(word, model, pca2, pca3, pca4, 3)
+                # compute the word length
+                w = int(max(3,1.5*compute_word_length(word)))
+                # add some +/- variance
+                i0 = test_positive(nx)
+                i1 = test_positive(ny)
+                i2 = test_positive(nz)
+
+
+                x1 = x_old_1
+                y1 = y_old_1
+                z1 = z_old_1
+
+                # compute the front surface of the framework
+                # compute the second point of the framework
+                [x2, y2, z2] = solve_point_on_vector(x1, y1, z1, w, nx,ny,nz)
+
+
+                # use the word-level to determine the framework's height
+                distance = w
+                # add some random offset
+                offset = distance*(0.4*random.random()-0.2)
+
+                distance_vertical = distance
+                distance_horizontal = w
+
+                # compute the coordinates of the framework
+                z1 = z1+offset
+                z2 = z2+offset
+
+                x3 = x1
+                y3 = y1
+                z3 = z1+distance_vertical
+
+                x4 = x2
+                y4 = y2
+                z4 = z2+distance_vertical
+
+                # the second point of this framework is used as the first point of the next framework
+                x_old_1 = x2
+                y_old_1 = y2
+                z_old_1 = z2
+
+                # compute the back surface of the framework
+                # compute the first point's coordinate based on the previous result
+                [x_move1, y_move1] = solve_moving_line(x1, y1, x2, y2, distance_horizontal)
+
+                # compute the second point's coordinate based on the previous result
+                x_move2 = x_move1+x2-x1
+                y_move2 = y_move1+y2-y1
+
+                color_value = [0,0,0]
+                test_color = [0,0,0]
+
+
+                square_f = makeQuad(x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, test_color,[x_origin,y_origin,z_origin],1)
+                # store the surface
+                snode = GeomNode('square_f')
+                snode.addGeom(square_f)
+                node_f = NodePath(snode)
+                # set the alpha channel based on the word vector
+                node_f.setTransparency(1)
+                howOpaque=0.5+abs(color_value[2])*0.5
+                node_f.setColorScale(1,1,1,howOpaque)
+                node_f.setTwoSided(True)
+                node_f.setAttrib(DepthOffsetAttrib.make(0))
+                node_f.setMaterial(self.myMaterialAnswerSurface)
+                node_dict[count].append(node_f)
+
+                # compute the back surface of the framework
+                square_b = makeQuad(x_move1, y_move1, z1, x_move2, y_move2, z2, x_move1, y_move1, z3, x_move2, y_move2, z4, test_color,[x_origin,y_origin,z_origin],1)
+                snode = GeomNode('square_b')
+                snode.addGeom(square_b)
+                node_b = NodePath(snode)
+                # set the alpha channel based on the word vector
+                node_b.setTransparency(1)
+                howOpaque=0.5+abs(color_value[2])*0.5
+                node_b.setColorScale(1,1,1,howOpaque)
+                node_b.setTwoSided(True)
+                node_b.setAttrib(DepthOffsetAttrib.make(0))
+                node_b.setMaterial(self.myMaterialAnswerSurface)
+                node_dict[count].append(node_b)
+
+                square_bottom = makeQuad(x1, y1, z1, x2, y2, z2, x_move1, y_move1, z1, x_move2, y_move2, z2, test_color,[x_origin,y_origin,z_origin],1)
+                snode = GeomNode('square_bottom')
+                snode.addGeom(square_bottom)
+                node_bottom = NodePath(snode)
+                node_bottom.setTransparency(1)
+                howOpaque=0.5+abs(color_value[2])*0.5
+                node_bottom.setColorScale(1,1,1,howOpaque)
+                node_bottom.setTwoSided(True)
+                node_bottom.setAttrib(DepthOffsetAttrib.make(0))
+                node_bottom.setMaterial(self.myMaterialAnswerSurface)
+                node_dict[count].append(node_bottom)
+
+                # draw the top surface of the framework
+                square_up = makeQuad(x1, y1, z3, x2, y2, z4, x_move1, y_move1, z3, x_move2, y_move2, z4, test_color,[x_origin,y_origin,z_origin],1)
+                snode = GeomNode('square_up')
+                snode.addGeom(square_up)
+                node_up = NodePath(snode)
+                node_up.setTransparency(1)
+                howOpaque=0.5+abs(color_value[2])*0.5
+                node_up.setColorScale(1,1,1,howOpaque)
+                node_up.setTwoSided(True)
+                node_up.setAttrib(DepthOffsetAttrib.make(0))
+                node_up.setMaterial(self.myMaterialAnswerSurface)
+                node_dict[count].append(node_up)
+
+                # store the 8 points of the framework
+                points = [[x1, y1, z1], [x2, y2, z2], [x3, y3, z3], [x4, y4, z4],
+                [x_move1, y_move1, z1], [x_move2, y_move2, z2], [x_move1, y_move1, z3], [x_move2, y_move2, z4]]
+
+
+
+                # add some random points inside the framework
+                for i in range(w):
+                    p1 = random.choice([[x1, y1, z1], [x2, y2, z2], [x3, y3, z3], [x4, y4, z4]])
+                    p2 = random.choice([[x_move1, y_move1, z1], [x_move2, y_move2, z2], [x_move1, y_move1, z3], [x_move2, y_move2, z4]])
+
+                    p_select = choice_random_point_on_line(p1, p2)
+
+                    points.append(p_select)
+
+                snode = GeomNode('square_in')
+
+                # choose w surface
+                for i in range(w):
+                    # choose four points from the point-list to create the surface
+                    [p_1, p_2, p_3,p_4] = random.choices(points, k=4)
+                    p1 = copy.deepcopy(p_1)
+                    p2 = copy.deepcopy(p_2)
+                    p3 = copy.deepcopy(p_3)
+                    p4 = copy.deepcopy(p_4)
+
+                    # add some random offset
+                    factor = 2
+
+                    p1[0] = p_1[0]+factor*random.random()-factor/2
+                    p1[1] = p_1[1]+factor*random.random()-factor/2
+
+                    p2[0] = p_2[0]+factor*random.random()-factor/2
+                    p2[1] = p_2[1]+factor*random.random()-factor/2
+
+                    p3[0] = p_3[0]+factor*random.random()-factor/2
+                    p3[1] = p_3[1]+factor*random.random()-factor/2
+
+                    p4[0] = p_4[0]+factor*random.random()-factor/2
+                    p4[1] = p_4[1]+factor*random.random()-factor/2
+
+
+
+                    color_all = []
+
+                    for p in [p1,p2,p3,p4]:
+                        color_set = floor((p[0]-x1)/(x2-x1)*len(syllables))-len(syllables)/2
+
+                        color_r = [color_set/len(syllables),color_set/len(syllables),color_set/len(syllables)]
+                        color_all.append(color_r)
+
+
+                    # draw the surface based on the computed color
+                    square_in = makeQuad(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2], p3[0], p3[1], p3[2], p4[0], p4[1], p4[2],color_all,[x_origin,y_origin,z_origin],0)
+
+                    snode.addGeom(square_in)
+
+                node_in = NodePath(snode)
+
+                # set the alpha channel based on the word vector
+                node_in.setTransparency(1)
+                howOpaque=0.5+abs(color_value[2])*0.5
+                node_in.setColorScale(1,1,1,howOpaque)
+                node_in.setAttrib(DepthOffsetAttrib.make(1))
+                node_in.setMaterial(self.myMaterialAnswerIn)
+                node_dict[count].append(node_in)
+
+
+                for node in node_dict[count]:
+                    node.reparentTo(self.node_for_answer)
+                    node.setPos(x1,y1,z1)
+
+                count+=1
+            self.node_for_answer.setPos(x_origin, y_origin, z_origin)
 
 
 

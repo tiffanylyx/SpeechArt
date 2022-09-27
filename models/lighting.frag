@@ -27,12 +27,12 @@ out vec4 p3d_FragColor;
 void main() {
   vec4 color_texture = texture(p3d_Texture0, texcoord);
 
-  if(color_texture.r==1){
+  //if(color_texture.r==1){
   p3d_FragColor.rgb =0.6*color.rgb+0.4*p3d_LightModel.ambient.rgb * p3d_Material.ambient.rgb;
-  }
-  else{
-  p3d_FragColor.rgb = 0.6*color_texture.rgb+0.4*p3d_LightModel.ambient.rgb * p3d_Material.ambient.rgb;
-  }
+  //}
+  //else{
+  //p3d_FragColor.rgb = 0.6*color_texture.rgb+0.4*p3d_LightModel.ambient.rgb * p3d_Material.ambient.rgb;
+  //}
 
 
   float alpha = p3d_Material.roughness * p3d_Material.roughness;
