@@ -22,20 +22,21 @@ import random
 
 from math import sqrt
 
-from allennlp.predictors.predictor import Predictor
+#from allennlp.predictors.predictor import Predictor
 
-from sentence_transformers import SentenceTransformer, LoggingHandler, util, evaluation, models, InputExample
+import transformers
 
+import torch.nn.functional as F
 import os
 import torch
 
 import time
 
-import transformers
+
 
 
 model_url = "https://storage.googleapis.com/allennlp-public-models/coref-spanbert-large-2020.02.27.tar.gz"
-predictor = Predictor.from_path(model_url)
+#predictor = Predictor.from_path(model_url)
 
 with open('model/pca4.pkl', 'rb') as pickle_file:
     pca4 = pickle.load(pickle_file)
@@ -48,11 +49,12 @@ with open('model/pca3_sentenceVec_transformer.pkl', 'rb') as pickle_file:
     pca3_sentenceVec = pickle.load(pickle_file)
 #documents = [TaggedDocument(doc, [i]) for i, doc in enumerate(common_texts)]
 
-from sentence_transformers import SentenceTransformer, util
+#from sentence_transformers import SentenceTransformer, util
 
 model = Word2Vec.load("model/word2vec_text8.model")
 
-model_sentence = SentenceTransformer('all-MiniLM-L6-v2')
+model_sentence = transformers.AutoModel.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
+model_token = transformers.AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
 
 def pre_process_sentence(sentence):
     tokens = nltk.tokenize.word_tokenize(sentence)
@@ -65,10 +67,18 @@ def pre_process_sentence(sentence):
     sentence1 = TextBlob(clean_sentence)
     sentence2 = str(sentence1.correct())
     return sentence2
-def compute_sent_vec(sentence, model,pca3_sentenceVec):
-    vector = model.encode(sentence, convert_to_tensor=False)
-    res = pca3_sentenceVec.transform([vector])[0]
+def mean_pooling(model_output, attention_mask):
+    token_embeddings = model_output[0] #First element of model_output contains all token embeddings
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
 
+def compute_sent_vec(sentence, model,tokenizer,pca3_sentenceVec):
+    encoded_input = tokenizer(sentence, padding=True, truncation=True, return_tensors='pt')
+    with torch.no_grad():
+        model_output = model(**encoded_input)
+    sentence_embeddings = mean_pooling(model_output, encoded_input['attention_mask'])
+    sentence_embeddings = F.normalize(sentence_embeddings, p=2, dim=1)
+    res = pca3_sentenceVec.transform(sentence_embeddings)[0]
     normalized_res = res/np.linalg.norm(res)
     return normalized_res
 
@@ -178,11 +188,11 @@ def get_cfg_structure(sent):
 
 
     return word_parts,res_key
-
+'''
 def compute_co_reference(sentence):
     prediction = predictor.predict(document=sentence)  # get prediction
     return prediction['clusters']
-
+'''
 from nltk.corpus import cmudict
 d = cmudict.dict()
 def compute_syllables(word,d):

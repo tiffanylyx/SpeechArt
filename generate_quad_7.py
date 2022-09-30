@@ -61,7 +61,7 @@ import re as re_py
 import speech_recognition as sr
 import struct
 import math
-import crepe
+#import crepe
 from scipy.io import wavfile
 from scipy.io.wavfile import read, write
 import io
@@ -78,24 +78,22 @@ if not os.path.exists('./texture'):
 # change the window size
 loadPrcFileData('', 'win-size 1980 1200')
 os.environ["CURL_CA_BUNDLE"]=""
-
+'''
 load_prc_file_data("", """
 framebuffer-srgb #t
 default-fov 75
 gl-version 3 2
 bounds-type best
 """)
-
+'''
 from queue import Queue
 from threading import Thread
 import struct
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
-tokenizer = AutoTokenizer.from_pretrained("oliverguhr/fullstop-punctuation-multilang-large")
-model = AutoModelForTokenClassification.from_pretrained("oliverguhr/fullstop-punctuation-multilang-large")
-
-
+import transformers
+tokenizer = transformers.AutoTokenizer.from_pretrained("oliverguhr/fullstop-punctuation-multilingual-base")
+model =transformers.AutoModelForTokenClassification.from_pretrained("oliverguhr/fullstop-punctuation-multilingual-base")
 messages = Queue()
 recordings = Queue()
 getInput = Queue()
@@ -179,7 +177,7 @@ class App(ShowBase):
         # create a window and set up everything we need for rendering into it.
         ShowBase.__init__(self)
         self.keyboard = False
-        self.shader = Shader.load(Shader.SL_GLSL, "models/lighting.vert", "models/lighting.frag")
+        #self.shader = Shader.load(Shader.SL_GLSL, "models/lighting.vert", "models/lighting.frag")
 
         # set up basic functions
         self.setBackgroundColor(0.7,0.7,0.7)
@@ -219,7 +217,7 @@ class App(ShowBase):
 
 
         self.alight = AmbientLight('alight')
-        self.alight.setColor((1,1,1,1))
+        self.alight.setColor((0.3,0.3,0.3,1))
         #self.alight.setColor(VBase4(skycol * 0.04, 1))
         self.alnp = render.attachNewNode(self.alight)
         self.alnp.node().setColorTemperature(6000)
@@ -229,7 +227,7 @@ class App(ShowBase):
 
         self.directionalLight = DirectionalLight('directionalLight')
         #self.directionalLight.setColor((1, 1, 1, 1))
-        self.directionalLight.setShadowCaster(True, 2048, 2048)
+        self.directionalLight.setShadowCaster(True)
         self.directionalLight.get_lens().set_near_far(1, 100)
         self.directionalLight.get_lens().set_film_size(40, 80)
         self.directionalLight.show_frustum()
@@ -247,8 +245,8 @@ class App(ShowBase):
         render.setLight(self.directionalLightNP)
 
         render.setAntialias(AntialiasAttrib.MAuto)
-        render.set_shader(self.shader)
-        #render.setShaderAuto()
+        #render.set_shader(self.shader)
+        render.setShaderAuto()
 
         # control the event
         self.accept("escape", sys.exit)
@@ -328,12 +326,12 @@ class App(ShowBase):
         self.myMaterialIn = Material()
         self.myMaterialIn.setShininess(100) # Make this material shiny
         self.myMaterialIn.setAmbient((0.7, 0.7, 0.7, 0.5))
-        self.myMaterialIn.setSpecular((1.5, 1.5, 1.5*255/165,1)) # Make this material blue
+        self.myMaterialIn.setSpecular((222/255, 255/255, 246/255,1)) # Make this material blue
 
         self.myMaterialSurface = Material()
         self.myMaterialSurface.setShininess(20) # Make this material shiny
         self.myMaterialSurface.setAmbient((1, 1, 1, 0.5))
-        self.myMaterialSurface.setSpecular((1.5, 1.5*255/165,1.5,  1))
+        self.myMaterialSurface.setSpecular((239/255, 230/255, 255/255,  1))
 
         self.myMaterialAnswerSurface = Material()
         self.myMaterialAnswerSurface.setShininess(100) # Make this material shiny
@@ -348,8 +346,8 @@ class App(ShowBase):
 
         self.myMaterial_frame = Material()
         self.myMaterial_frame.setShininess(100) # Make this material shiny
-        self.myMaterial_frame.setAmbient((0,0,5,1)) # Make this material shiny
-        self.myMaterial_frame.setSpecular((0, 1, 0, 1)) # Make this material blue
+        self.myMaterial_frame.setAmbient((178/255, 169/255, 255/255,1)) # Make this material shiny
+        self.myMaterial_frame.setSpecular((169/255, 255/255, 235/255, 1)) # Make this material blue
 
 
         self.temperature_previous = 0
@@ -389,7 +387,7 @@ class App(ShowBase):
         self.text_all = ''
         self.get_result = False
         self.recordCount = 0
-        self.pun = pipeline('ner', model=model, tokenizer=tokenizer)
+        self.pun = transformers.pipeline('ner', model=model, tokenizer=tokenizer)
 
         self.x_old_1 = 0
         self.y_old_1 = 0
@@ -415,6 +413,8 @@ class App(ShowBase):
         self.create = False
         self.answer_number = 0
         self.move_pixel = 0
+        fltr = CommonFilters(self.win, self.cam)
+        fltr.setBlurSharpen(self, amount=1)
         #self.pitch_res = []
     def camera_control(self):
         if self.keyboard:
@@ -613,9 +613,10 @@ class App(ShowBase):
                 rms = audioop.rms(data, 2)
                 lines.setThickness(rms/60)
 
-                if rms>80:
+                if rms>50:
                     frames.append(data)
                 if len(frames) >= RECORD_FRACTURE*(FRAME_RATE * RECORD_SECONDS) / chunk:
+                    print("Eddit!")
                     recordings.put(frames.copy())
                     frames = frames[int(len(frames)/2):]
                     under_length = False
@@ -652,16 +653,12 @@ class App(ShowBase):
                 audio = r.record(source)
             try:
                 MyText = r.recognize_google(audio)
-
-
                 if self.recordCount==1:
                     MyText = ' '.join(MyText.split(" ")[:-1])
                 else:
                     MyText = ' '.join(MyText.split(" ")[1:-1])
                 print("MyText", MyText)
-
                 self.text_old = copy.deepcopy(self.text_all)
-
                 self.text_all, self.text_add = self.check(self.text_all,MyText )
 
                 #if self.recordCount %2==0:
@@ -670,18 +667,13 @@ class App(ShowBase):
                 for n in output_json:
                     result = n['word'].replace('▁',' ') + n['entity'].replace('0','')
                     self.s+= result
-
-
-
                 word_list = self.text_add.split(" ")
                 if len(word_list)>0:
                     res = np.array_split(pitch[0],len(word_list))
 
                     pitch_res = []
                     for pitch_word in res:
-
                         pitch_res.append((np.mean(pitch_word.numpy())-210)/4)
-
                     self.last_sentence_with_punctuation_old = copy.deepcopy(self.last_sentence_with_punctuation)
                     #print("Word list: ", word_list)
                     res_parts = compute_sent_parts(word_list)
@@ -751,7 +743,6 @@ class App(ShowBase):
                     start_index = index
 
                     self.this_sentence_word_structure = {}
-
                     self.last_sentence_with_punctuation = self.last_sentence_with_punctuation_new
                     #print("The Whole Sentence: ",self.last_sentence_with_punctuation)
                     word_list = self.last_sentence_with_punctuation.split(" ")
@@ -767,12 +758,7 @@ class App(ShowBase):
                         word_list = nltk.word_tokenize(self.last_sentence_with_punctuation)
                         if len(word_list)>1:
                             self.inputSentence.setText("Input Sentence: "+self.last_sentence_with_punctuation)
-
                             self.process_sentence(self.last_sentence_with_punctuation, self.this_sentence_word_structure,start_index)
-
-
-                            # generate dialogue
-
 
                             answer = generate_conversation(self.last_sentence_with_punctuation,chatbot)
                             word_list = nltk.word_tokenize(answer)
@@ -808,7 +794,7 @@ class App(ShowBase):
 
 
         sentiment = compute_sent_sentiment(sentence)
-        sent_vect = compute_sent_vec(sentence, model_sentence,pca3_sentenceVec)
+        sent_vect = compute_sent_vec(sentence, model_sentence,model_token,pca3_sentenceVec)
 
         self.x_origin_pre = copy.deepcopy(self.x_origin)
         self.y_origin_pre = copy.deepcopy(self.y_origin)
@@ -857,7 +843,7 @@ class App(ShowBase):
             i1 = random.choice((1,-1))#test_positive(sent_vect[1])
             i2 = random.choice((1,-1))#test_positive(sent_vect[2])
             # compute the sentence vector of the sub sentence
-            sub_sent_vect = compute_sent_vec(sub_sentence, model_sentence,pca3_sentenceVec)
+            sub_sent_vect = compute_sent_vec(sub_sentence, model_sentence,model_token,pca3_sentenceVec)
 
             sub_word_list = sub_sentence.split(' ')
             if ' ' in word_list:
@@ -1481,7 +1467,7 @@ class App(ShowBase):
             time_period = now_time-self.previous_time
 
             # compute the 3D sentence vector of the input sentence
-            sent_vect = compute_sent_vec(sentence, model_sentence,pca3_sentenceVec)
+            sent_vect = compute_sent_vec(sentence, model_sentence,model_token,pca3_sentenceVec)
 
             # compute the starting position of the new structure
             [x_origin, y_origin,z_origin] = solve_point_on_vector(0,0,0, time_period*self.distance_offset, sent_vect[0],sent_vect[1], sent_vect[2])
