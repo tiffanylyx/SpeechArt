@@ -8,21 +8,21 @@ from direct.filter.CommonFilters import CommonFilters
 from panda3d.core import LVecBase3
 from panda3d.core import PointLight, DirectionalLight
 from panda3d.core import *
-
+import aubio
 
 #from test_realtime_speech import *
 from direct.stdpy import threading
 load_prc_file_data("", """
 framebuffer-srgb #t
 default-fov 75
-gl-version 3 2
 bounds-type best
+textures-power-2 none
+basic-shaders-only #t
 """)
 
 from queue import Queue
 from threading import Thread
 import struct
-from recasepunc import recasepunc
 import os
 import numpy as np
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -59,6 +59,14 @@ import time
 
 import speech_recognition as sr
 r = sr.Recognizer()
+
+tolerance = 0.8
+win_s = 4096 # fft size
+hop_s = 512 # hop size
+pitch_o = aubio.pitch("default", win_s, hop_s, FRAME_RATE)
+pitch_o.set_unit("midi")
+pitch_o.set_tolerance(tolerance)
+
 
 def write_header(_bytes, _nchannels, _sampwidth, _framerate):
     WAVE_FORMAT_PCM = 0x0001
@@ -105,21 +113,16 @@ class MyApp(ShowBase):
         directionalLight.get_lens().set_film_size(20, 40)
         directionalLight.show_frustum()
 
-        directionalLightNP = render.attachNewNode(directionalLight)
-        # This light is facing forwards, away from the camera.
-        directionalLightNP.setHpr(0, -20, 0)
-        self.render.setLight(directionalLightNP)
 
-        directionalLight = DirectionalLight('directionalLight')
-        directionalLight.setColor((0.8, 0.8, 0.8, 1))
-        directionalLight.setShadowCaster(True, 512, 512)
         dlens = directionalLight.getLens()
         dlens.setFilmSize(41, 21)
         dlens.setNearFar(50, 75)
-        directionalLightNP = render.attachNewNode(directionalLight)
+        self.directionalLightNP = render.attachNewNode(directionalLight)
         # This light is facing forwards, away from the camera.
-        directionalLightNP.setHpr(20,0, 0)
-        self.render.setLight(directionalLightNP)
+        self.directionalLightNP.setHpr(0, -20, 0)
+        self.render.setLight(self.directionalLightNP)
+
+
 
 
         # Add the spinCameraTask procedure to the task manager.
@@ -146,10 +149,69 @@ class MyApp(ShowBase):
         self.get_result = False
         self.create = False
 
-        self.filters = CommonFilters(base.win, base.cam)
-        self.filters.setCartoonInk(1000)
+        self.filters = CommonFilters(self.win, self.cam)
+        
+        #self.filters.setInverted()
+        #self.filters.setCartoonInk(1000)
+        #self.filters.setVolumetricLighting(directionalLightNP, 128, 5, 0.5, 1)
+        self.rms = 5
 
+        # Create the distortion buffer. This buffer renders like a normal
+        # scene,
+        self.distortionBuffer = self.makeFBO("model buffer")
+        self.distortionBuffer.setSort(-3)
+        self.distortionBuffer.setClearColor((0, 0, 0, 0))
 
+        # We have to attach a camera to the distortion buffer. The distortion camera
+        # must have the same frustum as the main camera. As long as the aspect
+        # ratios match, the rest will take care of itself.
+        distortionCamera = self.makeCamera(self.distortionBuffer, scene=render,
+                                           lens=self.cam.node().getLens(), mask=BitMask32.bit(4))
+
+        # load the object with the distortion
+        self.distortionObject = loader.loadModel("models/sphere")
+        self.distortionObject.setScale(10)
+        #self.distortionObject.setPos(0, 20, -3)
+        self.distortionObject.hprInterval(10, LPoint3(360, 0, 0)).loop()
+        self.distortionObject.reparentTo(render)
+
+        # Create the shader that will determime what parts of the scene will
+        # distortion
+        distortionShader = loader.loadShader("distortion.sha")
+        self.distortionObject.setShader(distortionShader)
+        self.distortionObject.hide(BitMask32.bit(4))
+
+        # Textures
+        tex1 = loader.loadTexture("models/water.png")
+        self.distortionObject.setShaderInput("waves", tex1)
+
+        self.texDistortion = Texture()
+        self.distortionBuffer.addRenderTexture(
+            self.texDistortion, GraphicsOutput.RTMBindOrCopy, GraphicsOutput.RTPColor)
+        self.distortionObject.setShaderInput("screen", self.texDistortion)
+
+        # Panda contains a built-in viewer that lets you view the results of
+        # your render-to-texture operations.  This code configures the viewer.
+        self.accept("v", self.bufferViewer.toggleEnable)
+        self.accept("V", self.bufferViewer.toggleEnable)
+        self.bufferViewer.setPosition("llcorner")
+        self.bufferViewer.setLayout("hline")
+        self.bufferViewer.setCardSize(0.652, 0)
+
+    def makeFBO(self, name):
+        # This routine creates an offscreen buffer.  All the complicated
+        # parameters are basically demanding capabilities from the offscreen
+        # buffer - we demand that it be able to render to texture on every
+        # bitplane, that it can support aux bitplanes, that it track
+        # the size of the host window, that it can render to texture
+        # cumulatively, and so forth.
+        winprops = WindowProperties()
+        props = FrameBufferProperties()
+        props.setRgbColor(1)
+        return self.graphicsEngine.makeOutput(
+            self.pipe, "model buffer", -2, props, winprops,
+            GraphicsPipe.BFSizeTrackHost | GraphicsPipe.BFRefuseWindow,
+            self.win.getGsg(), self.win)
 
 
     # Define a procedure to move the camera.
@@ -164,6 +226,7 @@ class MyApp(ShowBase):
             print("self.text_all",self.text_all)
             print("self.s",self.s)
             self.get_result = False
+ 
         return Task.cont
 
     # Define a procedure to move the camera.
@@ -191,6 +254,11 @@ class MyApp(ShowBase):
 
 
             data = stream.read(chunk)
+            signal = np.fromstring(data, dtype=np.float32)
+            pitch = pitch_o(signal)[0]
+            confidence = pitch_o.get_confidence()
+
+            print("{} / {}".format(pitch,confidence))
             dataInt = struct.unpack(str(chunk) + 'h', data)
             dataFFT = np.abs(np.fft.fft(dataInt))*2/(11000*chunk)
             if self.create==False:
@@ -198,7 +266,7 @@ class MyApp(ShowBase):
                 lines.setColor(1,0,0,1)
                 lines.moveTo(0,0,0)
                 for x,z in enumerate(dataFFT[:int(len(dataFFT))]):
-                    lines.drawTo(x/4,0,z*10)
+                    lines.drawTo(x/10,0,z*30)
                     #lines.setVertex(x,x/4,0,z*10)
 
                 node = lines.create()
@@ -210,12 +278,18 @@ class MyApp(ShowBase):
             else:
                 for x,z in enumerate(dataFFT[:int(len(dataFFT))]):
                     #lines.drawTo(x/4,0,z*10)
-                    lines.setVertex(x,x/4,0,z*10)
+                    lines.setVertex(x,x/10,0,z*30)
 
 
 
             rms = audioop.rms(data, 2)
-
+            self.rms = rms
+            print("RMS: ", self.rms)
+            
+            self.filters.setVolumetricLighting(self.directionalLightNP, 64,int(self.rms/500), 0.5, 0.5)
+            #self.filters.setBlurSharpen(0)
+            myInterval1 = self.distortionObject.scaleInterval(1.0, int(self.rms/300))
+            myInterval1.start()
             if rms>100:
                 frames.append(data)
                 if len(frames) >= 3*(FRAME_RATE * RECORD_SECONDS) / chunk:
