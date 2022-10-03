@@ -13,7 +13,7 @@ allennlp==2.10.0
 allennlp-models
 
 SpeechRecognition
-pyaudio
+
 crepe
 tensorflow
 colour-science

@@ -6,7 +6,7 @@ from utils_geom import *
 
 from PIL import Image, ImageDraw, ImageFont
 
-font = ImageFont.truetype("Arial.ttf", size=40)
+font = ImageFont.truetype("font/Arial.ttf", size=40)
 
 # You can't normalize inline so this is a helper function
 def normalized(*args):

@@ -15,7 +15,7 @@ from direct.gui.OnscreenText import OnscreenText
 from direct.gui.DirectGui import *
 from direct.task import Task
 from direct.interval.IntervalGlobal import *
-
+from direct.filter.CommonFilters import CommonFilters
 # You can find the source code of the following functions on this page. You can search the keyword on the left-up cornor.
 # https://github.com/panda3d/panda3d/tree/dd3510eea743702400fe9aeb359d47bd2f5914ed/panda/src
 from panda3d.core import lookAt,AlphaTestAttrib,RenderAttrib
@@ -78,14 +78,13 @@ if not os.path.exists('./texture'):
 # change the window size
 loadPrcFileData('', 'win-size 1980 1200')
 os.environ["CURL_CA_BUNDLE"]=""
-'''
 load_prc_file_data("", """
 framebuffer-srgb #t
 default-fov 75
-gl-version 3 2
 bounds-type best
+textures-power-2 none
+basic-shaders-only #t
 """)
-'''
 from queue import Queue
 from threading import Thread
 import struct
@@ -413,9 +412,70 @@ class App(ShowBase):
         self.create = False
         self.answer_number = 0
         self.move_pixel = 0
-        fltr = CommonFilters(self.win, self.cam)
-        fltr.setBlurSharpen(self, amount=1)
-        #self.pitch_res = []
+
+        self.filters = CommonFilters(self.win, self.cam)
+        
+        #self.filters.setInverted()
+        #self.filters.setCartoonInk(1000)
+        #self.filters.setVolumetricLighting(directionalLightNP, 128, 5, 0.5, 1)
+        self.rms = 5
+
+        # Create the distortion buffer. This buffer renders like a normal
+        # scene,
+        self.distortionBuffer = self.makeFBO("model buffer")
+        self.distortionBuffer.setSort(-3)
+        self.distortionBuffer.setClearColor((0, 0, 0, 0))
+
+        # We have to attach a camera to the distortion buffer. The distortion camera
+        # must have the same frustum as the main camera. As long as the aspect
+        # ratios match, the rest will take care of itself.
+        distortionCamera = self.makeCamera(self.distortionBuffer, scene=render,
+                                           lens=self.cam.node().getLens(), mask=BitMask32.bit(4))
+
+        # load the object with the distortion
+        self.distortionObject = loader.loadModel("models/sphere")
+        self.distortionObject.setScale(10)
+        #self.distortionObject.setPos(0, 20, -3)
+        self.distortionObject.hprInterval(10, LPoint3(360, 0, 0)).loop()
+        self.distortionObject.reparentTo(render)
+
+        # Create the shader that will determime what parts of the scene will
+        # distortion
+        distortionShader = loader.loadShader("distortion.sha")
+        self.distortionObject.setShader(distortionShader)
+        self.distortionObject.hide(BitMask32.bit(4))
+
+        # Textures
+        tex1 = loader.loadTexture("models/water.png")
+        self.distortionObject.setShaderInput("waves", tex1)
+
+        self.texDistortion = Texture()
+        self.distortionBuffer.addRenderTexture(
+            self.texDistortion, GraphicsOutput.RTMBindOrCopy, GraphicsOutput.RTPColor)
+        self.distortionObject.setShaderInput("screen", self.texDistortion)
+
+        # Panda contains a built-in viewer that lets you view the results of
+        # your render-to-texture operations.  This code configures the viewer.
+        self.accept("v", self.bufferViewer.toggleEnable)
+        self.accept("V", self.bufferViewer.toggleEnable)
+        self.bufferViewer.setPosition("llcorner")
+        self.bufferViewer.setLayout("hline")
+        self.bufferViewer.setCardSize(0.652, 0)
+
+    def makeFBO(self, name):
+        # This routine creates an offscreen buffer.  All the complicated
+        # parameters are basically demanding capabilities from the offscreen
+        # buffer - we demand that it be able to render to texture on every
+        # bitplane, that it can support aux bitplanes, that it track
+        # the size of the host window, that it can render to texture
+        # cumulatively, and so forth.
+        winprops = WindowProperties()
+        props = FrameBufferProperties()
+        props.setRgbColor(1)
+        return self.graphicsEngine.makeOutput(
+            self.pipe, "model buffer", -2, props, winprops,
+            GraphicsPipe.BFSizeTrackHost | GraphicsPipe.BFRefuseWindow,
+            self.win.getGsg(), self.win)
     def camera_control(self):
         if self.keyboard:
             if self.camera_mode == 0:
@@ -514,15 +574,20 @@ class App(ShowBase):
 
             angleDegrees = task.time * 6.0
             angleRadians = angleDegrees * (pi / 180.0)
-
+            X = self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/changeRate+self.camera_distance * sin(angleRadians)
+            Y = self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/changeRate-self.camera_distance * cos(angleRadians)
+            Z = self.z_origin+self.camera_z
+            self.distortionObject.setPos(X,Y,Z)
             if self.camera_mode == 0:
                 # Choice 1: Fully automated camera (moving the image center and rotate)
 
-                self.camera.setX(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/changeRate+self.camera_distance * sin(angleRadians))
-                self.camera.setY(self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/changeRate-self.camera_distance * cos(angleRadians))
-                self.camera.setZ(self.z_origin+self.camera_z)
-                                   #self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/1000+8)
+
+                self.camera.setX(X)
+                self.camera.setY(Y)
+                self.camera.setZ(Z)
+                
                 self.camera.setHpr(angleDegrees, 0, R)
+                
 
             elif self.camera_mode == 1:
                 # Choice 2: Half automated camera (moving the image center)
@@ -611,7 +676,12 @@ class App(ShowBase):
 
 
                 rms = audioop.rms(data, 2)
+                self.rms = rms
                 lines.setThickness(rms/60)
+                self.filters.setVolumetricLighting(self.directionalLightNP, 64,int(self.rms/500), 0.5, 0.5)
+                myInterval1 = self.distortionObject.scaleInterval(1.0, int(self.rms/300))
+                myInterval1.start()
+
 
                 if rms>50:
                     frames.append(data)
@@ -1169,7 +1239,7 @@ class App(ShowBase):
         frame1.setTextureOff(1)
         frame1.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z1-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
         frame1.setTransparency(1)
-        frame1.setColorScale(0, 0.1, 0.2,1)
+        #frame1.setColorScale(0, 0.1, 0.2,1)
 
 
         self.node_dict_frame[self.word_index].append(frame1)
@@ -1178,7 +1248,7 @@ class App(ShowBase):
         frame2.setPosHprScale(LVecBase3(x2-x_origin,y2-y_origin,z2-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
         frame2.setTextureOff(1)
         frame2.setTransparency(1)
-        frame2.setColorScale(0, 0.1, 0.2,1)
+        #frame2.setColorScale(0, 0.1, 0.2,1)
 
         self.node_dict_frame[self.word_index].append(frame2)
 
@@ -1186,70 +1256,70 @@ class App(ShowBase):
         frame3.setPosHprScale(LVecBase3(x_move1-x_origin,y_move1-y_origin,z1-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
         frame3.setTextureOff(1)
         frame3.setTransparency(1)
-        frame3.setColorScale(0, 0.1, 0.2,1)
+        #frame3.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame3)
 
         frame4 = self.loader.loadModel("models/box")
         frame4.setPosHprScale(LVecBase3(x_move2-x_origin,y_move2-y_origin,z2-z_origin),LVecBase3(0,0,0),LVecBase3(0.04, 0.04, distance_vertical))
         frame4.setTextureOff(1)
         frame4.setTransparency(1)
-        frame4.setColorScale(0, 0.1, 0.2,1)
+        #frame4.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame4)
 
         frame5 = self.loader.loadModel("models/box")
         frame5.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z1-z_origin),LVecBase3(atan2(y_move1-y1, x_move1-x1)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
         frame5.setTextureOff(1)
         frame5.setTransparency(1)
-        frame5.setColorScale(0, 0.1, 0.2,1)
+        #frame5.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame5)
 
         frame6 = self.loader.loadModel("models/box")
         frame6.setPosHprScale(LVecBase3(x2-x_origin,y2-y_origin,z2-z_origin),LVecBase3(atan2(y_move2-y2, x_move2-x2)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
         frame6.setTextureOff(1)
         frame6.setTransparency(1)
-        frame6.setColorScale(0, 0.1, 0.2,1)
+        #frame6.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame6)
 
         frame7 = self.loader.loadModel("models/box")
         frame7.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z3-z_origin),LVecBase3(atan2(y_move1-y1, x_move1-x1)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
         frame7.setTextureOff(1)
         frame7.setTransparency(1)
-        frame7.setColorScale(0, 0.1, 0.2,1)
+        #frame7.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame7)
 
         frame8 = self.loader.loadModel("models/box")
         frame8.setPosHprScale(LVecBase3(x2-x_origin,y2-y_origin,z4-z_origin),LVecBase3(atan2(y_move2-y2, x_move2-x2)* 180.0/np.pi,0,0),LVecBase3(distance_horizontal, 0.04, 0.04))
         frame8.setTextureOff(1)
         frame8.setTransparency(1)
-        frame8.setColorScale(0, 0.1, 0.2,1)
+        #frame8.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame8)
 
         frame9 = self.loader.loadModel("models/box")
         frame9.setPosHprScale(LVecBase3(x1-x_origin,y1-y_origin,z1-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
         frame9.setTextureOff(1)
         frame9.setTransparency(1)
-        frame9.setColorScale(0, 0.1, 0.2,1)
+        #frame9.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame9)
 
         frame10 = self.loader.loadModel("models/box")
         frame10.setPosHprScale(LVecBase3(x3-x_origin,y3-y_origin,z3-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
         frame10.setTextureOff(1)
         frame10.setTransparency(1)
-        frame10.setColorScale(0, 0.1, 0.2,1)
+        #frame10.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame10)
 
         frame11 = self.loader.loadModel("models/box")
         frame11.setPosHprScale(LVecBase3(x_move1-x_origin, y_move1-y_origin, z1-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
         frame11.setTextureOff(1)
         frame11.setTransparency(1)
-        frame11.setColorScale(0, 0.1, 0.2,1)
+        #frame11.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame11)
 
         frame12 = self.loader.loadModel("models/box")
         frame12.setPosHprScale(LVecBase3(x_move1-x_origin, y_move1-y_origin, z3-z_origin),LVecBase3(atan2(y2-y1, x2-x1)* 180.0/np.pi, 0,-atan2(z2-z1, sqrt((x2-x1)**2+(y2-y1)**2))* 180.0/np.pi),LVecBase3(sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2), 0.04, 0.04))
         frame12.setTextureOff(1)
         frame12.setTransparency(1)
-        frame12.setColorScale(0, 0.1, 0.2,1)
+        #frame12.setColorScale(0, 0.1, 0.2,1)
         self.node_dict_frame[self.word_index].append(frame12)
 
 
