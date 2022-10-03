@@ -89,6 +89,7 @@ from queue import Queue
 from threading import Thread
 import struct
 import os
+import aubio
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import transformers
 tokenizer = transformers.AutoTokenizer.from_pretrained("oliverguhr/fullstop-punctuation-multilingual-base")
@@ -127,13 +128,20 @@ model_pitch = 'tiny'
 device = 'cuda:0'
 
 # Pick a batch size that doesn't cause memory errors on your gpu
-batch_size = 2048
+batch_size = 1024
 
 import time
 
 
 import speech_recognition as sr
 r = sr.Recognizer()
+
+tolerance = 0.8
+win_s = 4096 # fft size
+hop_s = 512 # hop size
+pitch_o = aubio.pitch("default", win_s, hop_s, FRAME_RATE)
+pitch_o.set_unit("Hz")
+pitch_o.set_tolerance(tolerance)
 
 def write_header(_bytes, _nchannels, _sampwidth, _framerate):
     WAVE_FORMAT_PCM = 0x0001
@@ -219,7 +227,7 @@ class App(ShowBase):
         self.alight.setColor((0.3,0.3,0.3,1))
         #self.alight.setColor(VBase4(skycol * 0.04, 1))
         self.alnp = render.attachNewNode(self.alight)
-        self.alnp.node().setColorTemperature(6000)
+        #self.alnp.node().setColorTemperature(6000)
         render.setLight(self.alnp)
 
 
@@ -229,7 +237,7 @@ class App(ShowBase):
         self.directionalLight.setShadowCaster(True)
         self.directionalLight.get_lens().set_near_far(1, 100)
         self.directionalLight.get_lens().set_film_size(40, 80)
-        self.directionalLight.show_frustum()
+        #self.directionalLight.show_frustum()
         self.directionalLight.setColor((250/255, 255/255, 200/255,1 ))
 
         self.directionalLight.color = self.directionalLight.color * 4
@@ -323,29 +331,29 @@ class App(ShowBase):
         self.pos_list = {}
 
         self.myMaterialIn = Material()
-        self.myMaterialIn.setShininess(100) # Make this material shiny
-        self.myMaterialIn.setAmbient((0.7, 0.7, 0.7, 0.5))
-        self.myMaterialIn.setSpecular((222/255, 255/255, 246/255,1)) # Make this material blue
+        self.myMaterialIn.setShininess(0.4) # Make this material shiny
+        #self.myMaterialIn.setAmbient((0.7, 0.7, 0.7, 0.5))
+        self.myMaterialIn.setSpecular((200/255, 255/255, 200/255,1)) # Make this material blue
 
         self.myMaterialSurface = Material()
-        self.myMaterialSurface.setShininess(20) # Make this material shiny
-        self.myMaterialSurface.setAmbient((1, 1, 1, 0.5))
+        self.myMaterialSurface.setShininess(1) # Make this material shiny
+        #self.myMaterialSurface.setAmbient((1, 1, 1, 0.5))
         self.myMaterialSurface.setSpecular((239/255, 230/255, 255/255,  1))
 
         self.myMaterialAnswerSurface = Material()
-        self.myMaterialAnswerSurface.setShininess(100) # Make this material shiny
-        self.myMaterialAnswerSurface.setAmbient((0,0,0, 0.5))
+        self.myMaterialAnswerSurface.setShininess(0.5) # Make this material shiny
+        #self.myMaterialAnswerSurface.setAmbient((0,0,0, 0.5))
         self.myMaterialAnswerSurface.setSpecular((0,0,0, 1))
 
         self.myMaterialAnswerIn = Material()
-        self.myMaterialAnswerIn.setShininess(100) # Make this material shiny
-        self.myMaterialAnswerIn.setAmbient((1,1,1, 0.5))
+        self.myMaterialAnswerIn.setShininess(0.5) # Make this material shiny
+        #self.myMaterialAnswerIn.setAmbient((1,1,1, 0.5))
         self.myMaterialAnswerIn.setSpecular((1,1,1, 1))
 
 
         self.myMaterial_frame = Material()
-        self.myMaterial_frame.setShininess(100) # Make this material shiny
-        self.myMaterial_frame.setAmbient((178/255, 169/255, 255/255,1)) # Make this material shiny
+        self.myMaterial_frame.setShininess(1) # Make this material shiny
+        #self.myMaterial_frame.setAmbient((178/255, 169/255, 255/255,1)) # Make this material shiny
         self.myMaterial_frame.setSpecular((169/255, 255/255, 235/255, 1)) # Make this material blue
 
 
@@ -419,12 +427,13 @@ class App(ShowBase):
         #self.filters.setCartoonInk(1000)
         #self.filters.setVolumetricLighting(directionalLightNP, 128, 5, 0.5, 1)
         self.rms = 5
+        self.changeRate = 1
 
         # Create the distortion buffer. This buffer renders like a normal
         # scene,
         self.distortionBuffer = self.makeFBO("model buffer")
         self.distortionBuffer.setSort(-3)
-        self.distortionBuffer.setClearColor((0, 0, 0, 0))
+        
 
         # We have to attach a camera to the distortion buffer. The distortion camera
         # must have the same frustum as the main camera. As long as the aspect
@@ -436,7 +445,7 @@ class App(ShowBase):
         self.distortionObject = loader.loadModel("models/sphere")
         self.distortionObject.setScale(10)
         #self.distortionObject.setPos(0, 20, -3)
-        self.distortionObject.hprInterval(10, LPoint3(360, 0, 0)).loop()
+        #self.distortionObject.hprInterval(10, LPoint3(360, 0, 0)).loop()
         self.distortionObject.reparentTo(render)
 
         # Create the shader that will determime what parts of the scene will
@@ -462,6 +471,10 @@ class App(ShowBase):
         self.bufferViewer.setLayout("hline")
         self.bufferViewer.setCardSize(0.652, 0)
 
+        self.expose = -0.3
+        #self.filters.setExposureAdjust(0)
+                    
+                    
     def makeFBO(self, name):
         # This routine creates an offscreen buffer.  All the complicated
         # parameters are basically demanding capabilities from the offscreen
@@ -507,7 +520,8 @@ class App(ShowBase):
                 self.instructionText7.show()
                 self.instructionText8.show()
                 self.sayHint.show()
-                #self.entry.show()
+                self.inputSentence.show()
+                self.generateAnswer.show()
             elif self.hide_instruction == 0:
                 self.hide_instruction = 1
                 self.instructionText.hide()
@@ -520,6 +534,8 @@ class App(ShowBase):
                 self.instructionText7.hide()
                 self.instructionText8.hide()
                 self.sayHint.hide()
+                self.inputSentence.hide()
+                self.generateAnswer.hide()                
                 #self.warning.hide()
                 #self.entry.hide()
 
@@ -568,23 +584,23 @@ class App(ShowBase):
 
         # control the camera movement
     def spinCameraTask(self, task):
-        changeRate = 1000
+        self.changeRate = self.sentence_length*400
         R = 0
         if self.move_camera:
 
             angleDegrees = task.time * 6.0
             angleRadians = angleDegrees * (pi / 180.0)
-            X = self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/changeRate+self.camera_distance * sin(angleRadians)
-            Y = self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/changeRate-self.camera_distance * cos(angleRadians)
-            Z = self.z_origin+self.camera_z
+            X = self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/self.changeRate
+            Y = self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/self.changeRate
+            Z = self.z_origin
             self.distortionObject.setPos(X,Y,Z)
             if self.camera_mode == 0:
                 # Choice 1: Fully automated camera (moving the image center and rotate)
 
 
-                self.camera.setX(X)
-                self.camera.setY(Y)
-                self.camera.setZ(Z)
+                self.camera.setX(X+self.camera_distance * sin(angleRadians))
+                self.camera.setY(Y-self.camera_distance * cos(angleRadians))
+                self.camera.setZ(Z+self.camera_z)
                 
                 self.camera.setHpr(angleDegrees, 0, R)
                 
@@ -592,28 +608,31 @@ class App(ShowBase):
             elif self.camera_mode == 1:
                 # Choice 2: Half automated camera (moving the image center)
                 #self.camera.setZ(self.z_origin+8)
-                self.camera.lookAt(self.x_origin_pre+(self.x_origin-self.x_origin_pre)*self.compute/changeRate,
-                                   self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/changeRate,
-                                   self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/changeRate)
+                self.camera.lookAt(X, Y,self.z_origin_pre+(self.z_origin-self.z_origin_pre)*self.compute/self.changeRate)
                 R = self.camera.getR()
 
-            if self.compute<changeRate/2:
+            if self.compute<self.changeRate/2:
                 self.compute += 2
-            elif self.compute<changeRate:
+            elif self.compute<self.changeRate:
                 self.compute += 1
-            elif self.compute==changeRate:
+            elif self.compute==self.changeRate:
                 R = self.camera.getR()
         return Task.cont
 
     def change_light_temperature(self, Task):
+        self.changeRate = self.sentence_length*400
+        
         if self.move_camera:
-            current_color = self.temperature_previous + (self.temperature_current-self.temperature_previous)*self.compute/1000
-            current_sentiment = self.sentiment_previous + (self.sentiment_current-self.sentiment_previous)*self.compute/1000
+            current_color = self.temperature_previous + (self.temperature_current-self.temperature_previous)*self.compute/self.changeRate
+            current_sentiment = self.sentiment_previous + (self.sentiment_current-self.sentiment_previous)*self.compute/self.changeRate
 
             self.alnp.node().setColorTemperature(current_color)
             back_color = colorsys.hsv_to_rgb(current_sentiment, current_sentiment,current_sentiment)
+            
 
             self.setBackgroundColor(back_color)
+            self.distortionBuffer.setClearColor((back_color[0],back_color[1],back_color[2], 0))
+            print("Current Color: ", current_color)
         return Task.cont
 
 
@@ -648,6 +667,7 @@ class App(ShowBase):
             try:
                 data = stream.read(chunk)
 
+                ''' 
                 dataInt = struct.unpack(str(chunk) + 'h', data)
                 dataFFT = np.abs(np.fft.fft(dataInt))*2/(11000*chunk)
                 if self.create==False:
@@ -673,23 +693,48 @@ class App(ShowBase):
                         #lines.drawTo(x/4,0,z*10)
                         lines.setVertex(x,self.move_pixel+x/10,0,z*30)
                     #self.move_pixel+=0.05
+                '''
+                
 
 
                 rms = audioop.rms(data, 2)
                 self.rms = rms
-                lines.setThickness(rms/60)
-                self.filters.setVolumetricLighting(self.directionalLightNP, 64,int(self.rms/500), 0.5, 0.5)
-                myInterval1 = self.distortionObject.scaleInterval(1.0, int(self.rms/300))
-                myInterval1.start()
+                #lines.setThickness(rms/60)
+                #print("rms: ",rms)
+                #self.filters.setVolumetricLighting(self.directionalLightNP, 64,int(self.rms/800)-0.3, 0.1, 0.1)
+                #self.filters.delExposureAdjust()
+                
+ 		
 
 
-                if rms>50:
+                if rms>700:
                     frames.append(data)
+                    #value = self.expose+0.015
+                    #self.filters.setExposureAdjust(value)
+                    #self.expose = value
+                    
+                    
+                    myInterval1 = self.distortionObject.scaleInterval(1.0, int(self.rms/10)-60)
+                    myInterval1.start()
+                #else:
+                    #value = self.expose-0.01
+                    #self.filters.setExposureAdjust(value)
+                    #self.expose = value
+                   
+                #print("self.expose: ", self.expose)
+                
                 if len(frames) >= RECORD_FRACTURE*(FRAME_RATE * RECORD_SECONDS) / chunk:
                     print("Eddit!")
                     recordings.put(frames.copy())
                     frames = frames[int(len(frames)/2):]
                     under_length = False
+                '''
+                signal = np.fromstring(data, dtype=np.float32)
+                pitch = pitch_o(signal)[0]
+                confidence = pitch_o.get_confidence()
+                '''
+                
+                #print("{} / {}".format(pitch,confidence))
             except:
                 continue
 
@@ -864,6 +909,7 @@ class App(ShowBase):
 
 
         sentiment = compute_sent_sentiment(sentence)
+        
         sent_vect = compute_sent_vec(sentence, model_sentence,model_token,pca3_sentenceVec)
 
         self.x_origin_pre = copy.deepcopy(self.x_origin)
@@ -985,7 +1031,7 @@ class App(ShowBase):
                 if node.getName() in name_list:
                     node.reparentTo(self.node_for_sub_sentence)
                     pos_new = self.word_pos_dict.get(node.getName(),(0,0,0))
-                    print("Node Information: ",pos_new,node.getName() )
+                    #print("Node Information: ",pos_new,node.getName() )
                     myInterval_word = node.posInterval(5, Point3(pos_new[0],pos_new[1],pos_new[2]))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
                     mySequence_move.append(myInterval_word)
 
@@ -1039,6 +1085,7 @@ class App(ShowBase):
         if self.input_sentence_number==1:
             self.temperature_previous = self.temperature_current
             self.sentiment_previous = self.sentiment_current
+        #print("sentiment: ", sentiment,self.sentiment_previous,self.sentiment_current)
 
         self.input_sentence = ''
 
@@ -1230,9 +1277,9 @@ class App(ShowBase):
 
         # add the framework structrue
 
-        x_origin = 0#x1
-        y_origin = 0#y1
-        z_origin = 0#z1
+        x_origin = self.x_origin#x1
+        y_origin = self.y_origin#y1
+        z_origin = self.z_origin#z1
 
         frame1 = self.loader.loadModel("models/box")
 
@@ -1504,7 +1551,7 @@ class App(ShowBase):
 
         for node in self.node_dict[self.word_index]:
             node.reparentTo(self.node_for_this_word )
-            node.setPos(x1,y1,z1)
+            node.setPos(x1-x_origin,y1-y_origin,z1-z_origin)
 
         for node in self.node_dict_frame[self.word_index]:
             node.setMaterial(self.myMaterial_frame)
