@@ -1,3 +1,9 @@
+## Speech_Art Version 7
+Update 2022/10/09
+![image](workflowV2.jpeg)
+
+
+
 ## Speech_Art Version 6
 Update 2022/08/23
 
