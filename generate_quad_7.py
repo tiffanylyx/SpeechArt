@@ -422,7 +422,7 @@ class App(ShowBase):
         self.move_pixel = 0
 
         self.filters = CommonFilters(self.win, self.cam)
-        
+
         #self.filters.setInverted()
         #self.filters.setCartoonInk(1000)
         #self.filters.setVolumetricLighting(directionalLightNP, 128, 5, 0.5, 1)
@@ -433,7 +433,7 @@ class App(ShowBase):
         # scene,
         self.distortionBuffer = self.makeFBO("model buffer")
         self.distortionBuffer.setSort(-3)
-        
+
 
         # We have to attach a camera to the distortion buffer. The distortion camera
         # must have the same frustum as the main camera. As long as the aspect
@@ -473,8 +473,8 @@ class App(ShowBase):
 
         self.expose = -0.3
         #self.filters.setExposureAdjust(0)
-                    
-                    
+
+
     def makeFBO(self, name):
         # This routine creates an offscreen buffer.  All the complicated
         # parameters are basically demanding capabilities from the offscreen
@@ -535,7 +535,7 @@ class App(ShowBase):
                 self.instructionText8.hide()
                 self.sayHint.hide()
                 self.inputSentence.hide()
-                self.generateAnswer.hide()                
+                self.generateAnswer.hide()
                 #self.warning.hide()
                 #self.entry.hide()
 
@@ -601,9 +601,9 @@ class App(ShowBase):
                 self.camera.setX(X+self.camera_distance * sin(angleRadians))
                 self.camera.setY(Y-self.camera_distance * cos(angleRadians))
                 self.camera.setZ(Z+self.camera_z)
-                
+
                 self.camera.setHpr(angleDegrees, 0, R)
-                
+
 
             elif self.camera_mode == 1:
                 # Choice 2: Half automated camera (moving the image center)
@@ -621,14 +621,14 @@ class App(ShowBase):
 
     def change_light_temperature(self, Task):
         self.changeRate = self.sentence_length*400
-        
+
         if self.move_camera:
             current_color = self.temperature_previous + (self.temperature_current-self.temperature_previous)*self.compute/self.changeRate
             current_sentiment = self.sentiment_previous + (self.sentiment_current-self.sentiment_previous)*self.compute/self.changeRate
 
             self.alnp.node().setColorTemperature(current_color)
             back_color = colorsys.hsv_to_rgb(current_sentiment, current_sentiment,current_sentiment)
-            
+
 
             self.setBackgroundColor(back_color)
             self.distortionBuffer.setClearColor((back_color[0],back_color[1],back_color[2], 0))
@@ -667,7 +667,7 @@ class App(ShowBase):
             try:
                 data = stream.read(chunk)
 
-                ''' 
+                '''
                 dataInt = struct.unpack(str(chunk) + 'h', data)
                 dataFFT = np.abs(np.fft.fft(dataInt))*2/(11000*chunk)
                 if self.create==False:
@@ -694,7 +694,7 @@ class App(ShowBase):
                         lines.setVertex(x,self.move_pixel+x/10,0,z*30)
                     #self.move_pixel+=0.05
                 '''
-                
+
 
 
                 rms = audioop.rms(data, 2)
@@ -703,8 +703,8 @@ class App(ShowBase):
                 #print("rms: ",rms)
                 #self.filters.setVolumetricLighting(self.directionalLightNP, 64,int(self.rms/800)-0.3, 0.1, 0.1)
                 #self.filters.delExposureAdjust()
-                
- 		
+
+
 
 
                 if rms>700:
@@ -712,17 +712,17 @@ class App(ShowBase):
                     #value = self.expose+0.015
                     #self.filters.setExposureAdjust(value)
                     #self.expose = value
-                    
-                    
+
+
                     myInterval1 = self.distortionObject.scaleInterval(1.0, int(self.rms/10)-60)
                     myInterval1.start()
                 #else:
                     #value = self.expose-0.01
                     #self.filters.setExposureAdjust(value)
                     #self.expose = value
-                   
+
                 #print("self.expose: ", self.expose)
-                
+
                 if len(frames) >= RECORD_FRACTURE*(FRAME_RATE * RECORD_SECONDS) / chunk:
                     print("Eddit!")
                     recordings.put(frames.copy())
@@ -733,7 +733,7 @@ class App(ShowBase):
                 pitch = pitch_o(signal)[0]
                 confidence = pitch_o.get_confidence()
                 '''
-                
+
                 #print("{} / {}".format(pitch,confidence))
             except:
                 continue
@@ -909,7 +909,7 @@ class App(ShowBase):
 
 
         sentiment = compute_sent_sentiment(sentence)
-        
+
         sent_vect = compute_sent_vec(sentence, model_sentence,model_token,pca3_sentenceVec)
 
         self.x_origin_pre = copy.deepcopy(self.x_origin)
@@ -1175,7 +1175,7 @@ class App(ShowBase):
         # add some randomness
         #random.shuffle(sub_sent_vect)
         # compute the 3D word vector
-        [nx, ny, nz] = compute_word_vec(word, model, pca2, pca3, pca4, 3)
+        [nx, ny, nz] = compute_word_vec(word, model_word, pca2, pca3, pca4, 3)
         # compute the word length
         w = int(max(3,1.5*compute_word_length(word))*self.zoom_rate)
         self.word_length_information[word+"_"+str(self.word_index)] = w
@@ -1374,7 +1374,7 @@ class App(ShowBase):
         #self.y_origin +=y1
 
         # compute the color value (3D word vector)
-        color_value = compute_word_vec(word, model, pca2, pca3, pca4,3)
+        color_value = compute_word_vec(word, model_word, pca2, pca3, pca4,3)
         # if the word is a verb
 
         if pos == 'VERB':
@@ -1620,7 +1620,7 @@ class App(ShowBase):
                     continue
                 syllables = compute_syllables(word,d)
 
-                [nx, ny, nz] = compute_word_vec(word, model, pca2, pca3, pca4, 3)
+                [nx, ny, nz] = compute_word_vec(word, model_word, pca2, pca3, pca4, 3)
                 # compute the word length
                 w = int(max(3,1.5*compute_word_length(word)))
                 # add some +/- variance
