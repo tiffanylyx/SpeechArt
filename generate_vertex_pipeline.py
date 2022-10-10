@@ -1,4 +1,7 @@
-# There are other python libraries
+# This version is the pipeline of recognizing speech input and generate structure features from it.
+## Created on Oct 9, 2022
+## By:Yixuan Li
+
 import sys
 import os
 from math import pi, sin, cos, atan, sqrt, atan2, floor
