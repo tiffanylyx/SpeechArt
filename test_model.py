@@ -64,7 +64,7 @@ tolerance = 0.8
 win_s = 4096 # fft size
 hop_s = 512 # hop size
 pitch_o = aubio.pitch("default", win_s, hop_s, FRAME_RATE)
-pitch_o.set_unit("midi")
+pitch_o.set_unit("Hz")
 pitch_o.set_tolerance(tolerance)
 
 
@@ -286,7 +286,11 @@ class MyApp(ShowBase):
             self.rms = rms
             print("RMS: ", self.rms)
             
-            self.filters.setVolumetricLighting(self.directionalLightNP, 64,int(self.rms/500), 0.5, 0.5)
+            #self.filters.setExposureAdjust(100)
+            #self.filters.delExposureAdjust()
+            self.filters.setVolumetricLighting(self.directionalLightNP, 128,int(self.rms/500), 0.5, 0.5)
+   
+            
             #self.filters.setBlurSharpen(0)
             myInterval1 = self.distortionObject.scaleInterval(1.0, int(self.rms/300))
             myInterval1.start()
