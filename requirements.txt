@@ -17,3 +17,7 @@ pyaudio
 tensorflow
 colour-science
 networkx
+git+https://github.com/openai/whisper.git
+sounddevice
+asyncio
+numpy

@@ -6,6 +6,7 @@
 ## The language recognition part's accurancy has been improved.
 ## The overall performance has been improved a lot.
 
+## Panda3D Library import
 # You can find the source code of the following functions on this page. Some might not be avaliable on this page.
 # https://docs.panda3d.org/1.10/python/_modules/index
 from direct.showbase.ShowBase import ShowBase,LVecBase3,LQuaternion
@@ -16,6 +17,7 @@ from direct.gui.DirectGui import *
 from direct.task import Task
 from direct.interval.IntervalGlobal import *
 from direct.filter.CommonFilters import CommonFilters
+
 # You can find the source code of the following functions on this page. You can search the keyword on the left-up cornor.
 # https://github.com/panda3d/panda3d/tree/dd3510eea743702400fe9aeb359d47bd2f5914ed/panda/src
 from panda3d.core import lookAt,AlphaTestAttrib,RenderAttrib
@@ -33,11 +35,10 @@ from panda3d.core import NodePath
 from panda3d.core import Material
 from panda3d.core import Lens
 from panda3d.core import ColorAttrib,ColorBlendAttrib
-
-
 from panda3d.core import *
 
-# There are other python libraries
+# There are other python libraries\
+## Build In function
 import sys
 import os
 from math import pi, sin, cos, atan, sqrt, atan2, floor
@@ -45,36 +46,34 @@ import numpy as np
 from sympy import *
 import random
 import time
-
-
-from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 import copy
+import math
+import struct
+import re as re_py
+import io
+
+# External Libraies
+from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 import colorsys
 from nltk import *
 from textblob import TextBlob
 import networkx as nx
-import re as re_py
-
-
-import speech_recognition as sr
-import struct
-import math
-#import crepe
 from scipy.io import wavfile
 from scipy.io.wavfile import read, write
-import io
 
-
+# Funtion I defined
 from utils_geom import *
 from utils_nlp import *
 from utils_visual import *
 
-
+# Create a folder 
 if not os.path.exists('./texture'):
     os.makedirs('./texture')
 
 # change the window size
 loadPrcFileData('', 'win-size 1980 1200')
+
+# App config setting
 os.environ["CURL_CA_BUNDLE"]=""
 load_prc_file_data("", """
 framebuffer-srgb #t
@@ -83,14 +82,14 @@ bounds-type best
 textures-power-2 none
 basic-shaders-only #t
 """)
+
 from queue import Queue
 from threading import Thread
-import struct
-import os
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-import transformers
 
-# Audio Module
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+# Audio & Speech Module
+import transformers
 import pyaudio
 import torchcrepe
 import audioop
@@ -102,29 +101,31 @@ import wave
 # Load Punctuation Adding Model
 tokenizer = transformers.AutoTokenizer.from_pretrained("oliverguhr/fullstop-punctuation-multilingual-base")
 model =transformers.AutoModelForTokenClassification.from_pretrained("oliverguhr/fullstop-punctuation-multilingual-base")
+
+# Define Threading Process Varibles
 messages = Queue()
 recordings = Queue()
 getInput = Queue()
 
+# Settting up for audio processing
 
-# Provide a sensible frequency range for your domain (upper limit is 2006 Hz)
-# This would be a reasonable range for speech
+## Provide a sensible frequency range for your domain (upper limit is 2006 Hz)
+## This would be a reasonable range for speech
 fmin = 50
 fmax = 550
 
-# Select a model capacity--one of "tiny" or "full"
+## Select a model capacity--one of "tiny" or "full"
 model_pitch = 'tiny'
 
-# Choose a device to use for inference
+## Choose a device to use for inference
 device = 'cuda:0'
 
-# Pick a batch size that doesn't cause memory errors on your gpu
+## Pick a batch size that doesn't cause memory errors on your gpu
 batch_size = 1024
-
 
 p = pyaudio.PyAudio()
 
-# set the recording parameter
+## set the recording parameter
 CHANNELS = 1
 FRAME_RATE = 16000
 RECORD_SECONDS = 1
@@ -132,9 +133,9 @@ RECORD_FRACTURE = 5
 AUDIO_FORMAT = pyaudio.paInt16
 sampleWidth = p.get_sample_size(AUDIO_FORMAT)
 
-# Speech Recognizer
+## Speech Recognizer
 r = sr.Recognizer()
-# Pitch Recognizer
+## Pitch Recognizer
 tolerance = 0.8
 win_s = 4096 # fft size
 hop_s = 512 # hop size
@@ -158,7 +159,7 @@ def write_header(_bytes, _nchannels, _sampwidth, _framerate):
     bytes_to_add += struct.pack('<L', _datalength)
     return bytes_to_add + _bytes
 
-# Audio File Processor
+# Audio File Processor (Is it possible to add sterio?)
 def prepare_file(filename,CHANNELS,sampleWidth,FRAME_RATE, mode='wb'):
     wavefile = wave.open(filename, mode)
     wavefile.setnchannels(CHANNELS)
@@ -170,28 +171,30 @@ def prepare_file(filename,CHANNELS,sampleWidth,FRAME_RATE, mode='wb'):
 
 class App(ShowBase):
     # set up text instruction
-    def makeStatusLabel(self, text,i):
+    def makeStatusLabel(self, text,x,y):
         return OnscreenText(text=text,
             parent=base.a2dTopLeft, align=TextNode.ALeft,
             style=1, fg=(1, 1, 0, 1), shadow=(0, 0, 0, .4),
-            pos=(0.06, -0.4-(.06 * i)), scale=.05, mayChange=True, font =  self.loader.loadFont('font/Arial.ttf'))
+            pos=(0.01*x, -0.4-(.06 * y)), scale=.05, mayChange=True, font =  self.loader.loadFont('font/Arial.ttf'))
 
 
     def __init__(self):
         # Initialize the ShowBase class from which we inherit, which will
-
         # create a window and set up everything we need for rendering into it.
+        
         ShowBase.__init__(self)
-        #self.shader = Shader.load(Shader.SL_GLSL, "models/lighting.vert", "models/lighting.frag")
 
         # set up basic functions
+        ## Background fo the Enviroment
         self.setBackgroundColor(0.7,0.7,0.7)
+        ## Set the camera
         self.camLens.setFocalLength(1)
         lens = PerspectiveLens()
         self.cam.node().setLens(lens)
         self.camLens.setFov(5,5)
         self.camLens.setAspectRatio(2)
         self.camLens.setFar(100)
+        ## Add task that will be called every frame
         self.taskMgr.add(self.spinCameraTask, "SpinCameraTask")
         self.taskMgr.add(self.change_light_temperature,"Change Light Temperature")
         self.taskMgr.add(self.recordingTask,"Listen Mic Task")
@@ -199,19 +202,17 @@ class App(ShowBase):
 
 
 	# Initialize Instruction
-        self.instructionText = self.makeStatusLabel("ESC: quit",1.5)
-        self.instructionText1 = self.makeStatusLabel("R: render next image",3)
-        self.instructionText2 = self.makeStatusLabel("C: activate animation",4.5)
-        self.instructionText3 = self.makeStatusLabel("B: remove frames",6)
-        self.instructionText4 = self.makeStatusLabel("UP/DOWN: camera distance",7.5)
-        self.instructionText5 = self.makeStatusLabel("W/S: control camera's Z position",9)
-        self.instructionText6 = self.makeStatusLabel("I: hide all instructions",10.5)
-        self.instructionText7 = self.makeStatusLabel("T: hide text on surfaces",12)
-        self.instructionText8 = self.makeStatusLabel("N: hide the node structure",13.5)
-        self.inputSentence = self.makeStatusLabel("Input Sentence: ",15)
-        self.generateAnswer = self.makeStatusLabel("Generated Answer: ",16.5)
-
-
+        self.instructionText = self.makeStatusLabel("ESC: quit",6,1.5)
+        self.instructionText1 = self.makeStatusLabel("R: render next image",6,3)
+        self.instructionText2 = self.makeStatusLabel("C: activate animation",6,4.5)
+        self.instructionText3 = self.makeStatusLabel("B: remove frames",6,6)
+        self.instructionText4 = self.makeStatusLabel("UP/DOWN: camera distance",6,7.5)
+        self.instructionText5 = self.makeStatusLabel("W/S: control camera's Z position",6,9)
+        self.instructionText6 = self.makeStatusLabel("I: hide all instructions",6,10.5)
+        self.instructionText7 = self.makeStatusLabel("T: hide text on surfaces",6,12)
+        self.instructionText8 = self.makeStatusLabel("N: hide the node structure",6,13.5)
+        self.inputSentence = self.makeStatusLabel("Input Sentence: ",6,15)
+        self.generateAnswer = self.makeStatusLabel("Generated Answer: ",6,16.5)
         #add text entry
         #self.warning = self.makeStatusLabel(" ",0)
         self.sayHint = self.makeStatusLabel("You can say something",0)
@@ -228,17 +229,16 @@ class App(ShowBase):
         self.directionalLight.get_lens().set_film_size(40, 80)
         self.directionalLight.setColor((250/255, 255/255, 200/255,1 ))
         self.directionalLight.color = self.directionalLight.color * 4
+        ## Store the light in a node path
         self.directionalLightNP = render.attachNewNode(self.directionalLight)
         self.directionalLightNP.lookAt(0, 0, 0)
         self.directionalLightNP.setPos(10, -10, -10)
         self.directionalLightNP.hprInterval(20.0, (self.directionalLightNP.get_h() - 360, self.directionalLightNP.get_p() - 360, self.directionalLightNP.get_r() - 360), bakeInStart=True).loop()
-
-
         render.setLight(self.directionalLightNP)
         render.setAntialias(AntialiasAttrib.MAuto)
         render.setShaderAuto()
 
-        # control the event
+        # control the keyboard event, when one key pressed, run the function
         self.accept("escape", sys.exit)
         #self.accept("render", self.renderSurface)
         #self.accept("r", self.renderSurface)
@@ -250,7 +250,7 @@ class App(ShowBase):
         self.accept("s", self.camera_z_control_add)
         self.accept("i", self.hide_instruction)
         self.accept("t", self.hide_texture)
-        self.accept("n", self.hide_node)
+        #self.accept("n", self.hide_node)
 
 
         self.node_dict = {}
@@ -260,8 +260,6 @@ class App(ShowBase):
         self.x_origin = 0
         self.y_origin = 0
         self.get_input = True
-
-
         self.count = 0
         
         # Initialize Node Path to store render structure
@@ -312,7 +310,6 @@ class App(ShowBase):
         self.pos_list = {}
         
         # Set up material for differnt elements
-
         self.myMaterialIn = Material()
         self.myMaterialIn.setShininess(0.4) # Make this material shiny
         #self.myMaterialIn.setAmbient((0.7, 0.7, 0.7, 0.5))
@@ -400,6 +397,7 @@ class App(ShowBase):
         self.rms = 5
         self.changeRate = 1
 
+       
         # Create the distortion buffer. This buffer renders like a normal
         # scene,
         self.distortionBuffer = self.makeFBO("model buffer")
@@ -419,8 +417,7 @@ class App(ShowBase):
         #self.distortionObject.hprInterval(10, LPoint3(360, 0, 0)).loop()
         self.distortionObject.reparentTo(render)
 
-        # Create the shader that will determime what parts of the scene will
-        # distortion
+        # Create the shader that will determime what parts of the scene will be distorted
         distortionShader = loader.loadShader("distortion.sha")
         self.distortionObject.setShader(distortionShader)
         self.distortionObject.hide(BitMask32.bit(4))
@@ -458,12 +455,13 @@ class App(ShowBase):
             self.pipe, "model buffer", -2, props, winprops,
             GraphicsPipe.BFSizeTrackHost | GraphicsPipe.BFRefuseWindow,
             self.win.getGsg(), self.win)
-            
+    
+    # Keyboard control      
     def camera_control(self):
         if self.keyboard:
+            # 0 and 1 are different camera modes: automatioc movement or mouse control
             if self.camera_mode == 0:
                 self.camera_mode = 1
-
             elif self.camera_mode == 1:
                 self.camera_mode = 0
     def camera_distance_control_add(self):
@@ -506,9 +504,8 @@ class App(ShowBase):
                 self.sayHint.hide()
                 self.inputSentence.hide()
                 self.generateAnswer.hide()                
-                #self.warning.hide()
-                #self.entry.hide()
-
+    
+    # Turn off the box frame
     def box_frame_control(self):
         if self.keyboard:
             if self.box_frame == 0:
@@ -565,7 +562,7 @@ class App(ShowBase):
             else:
                 R = self.camera.getR()
         return Task.cont
-    # Define a procedure to change the lighting.
+    # Define a procedure to change the lighting (related to the overall sentiment)
     def change_light_temperature(self, Task):
         self.changeRate = self.sentence_length*60
         
@@ -597,7 +594,7 @@ class App(ShowBase):
         #getWord.start()
         return Task.done
 
-    # Function to get data from microphone
+     # This function deals with streaming microphone and sends sounds frame to recognition part
     def record_microphone(self,chunk=1024):
         print("Recording")
 
@@ -644,7 +641,7 @@ class App(ShowBase):
                 '''
                 
 
-
+		# amplitede
                 rms = audioop.rms(data, 2)
                 self.rms = rms
                 #lines.setThickness(rms/60)
@@ -654,14 +651,14 @@ class App(ShowBase):
                 
  		
 
-
+		# when the volumn is larger that a threshod
                 if rms>700:
                     frames.append(data)
                     #value = self.expose+0.015
                     #self.filters.setExposureAdjust(value)
                     #self.expose = value
                     
-                    
+                    # the distortion object is controled by the volumn
                     myInterval1 = self.distortionObject.scaleInterval(1.0, int(self.rms/10)-60)
                     myInterval1.start()
                 #else:
@@ -670,7 +667,7 @@ class App(ShowBase):
                     #self.expose = value
                    
                 #print("self.expose: ", self.expose)
-                
+                # if this section is long enough
                 if len(frames) >= RECORD_FRACTURE*(FRAME_RATE * RECORD_SECONDS) / chunk:
                     print("Eddit!")
                     recordings.put(frames.copy())
@@ -689,19 +686,24 @@ class App(ShowBase):
         stream.stop_stream()
         stream.close()
         p.terminate()
-
+        
+    # This function deals with speech recognition and call the vertex computation function of each input word
+    # First recognize microphone input,then clean the processed result, the for each word that is recognized, transform it into the space
     def speech_recognition(self,text_all,pun,recordCount):
-
-
         while not messages.empty():
             print("Recognition")
+            
+            # Get the stored sound frame
             frames = recordings.get()
             self.recordCount +=1
+            
+            filename = 'your_file'+'.wav'
 
-            wavefile = prepare_file('your_file'+'.wav',CHANNELS,sampleWidth,FRAME_RATE)
+            wavefile = prepare_file(filename,CHANNELS,sampleWidth,FRAME_RATE)
             wavefile.writeframes(b''.join(frames))
             wavefile.close()
-            harvard = sr.AudioFile('your_file'+'.wav')
+            audio_file = sr.AudioFile(filename)
+            
             rms = audioop.rms(b''.join(frames), 2)
             self.zoom_rate = max(1,(rms-600)/300)*0.6
             audio, srate = torchcrepe.load.audio('your_file'+'.wav' )
@@ -711,25 +713,31 @@ class App(ShowBase):
             # Compute pitch using first gpu
             pitch = torchcrepe.predict(audio,srate,hop_length,fmin,fmax,model_pitch,batch_size=batch_size)
 
-            #print("pitch: ", np.mean(pitch))
-            with harvard as source:
+            # convert the audio file into SR structure
+            with audio_file as source:
                 audio = r.record(source)
             try:
+            	# Recognize text
                 MyText = r.recognize_google(audio)
+                # Remove the first and last words
                 if self.recordCount==1:
                     MyText = ' '.join(MyText.split(" ")[:-1])
                 else:
                     MyText = ' '.join(MyText.split(" ")[1:-1])
                 print("MyText", MyText)
+                
+                # Merge the recognized result
                 self.text_old = copy.deepcopy(self.text_all)
                 self.text_all, self.text_add = self.check(self.text_all,MyText )
 
-                #if self.recordCount %2==0:
+                # Add punctuation
                 output_json = pun(self.text_all)
                 self.s = ''
+                # Clean the result
                 for n in output_json:
                     result = n['word'].replace('▁',' ') + n['entity'].replace('0','')
                     self.s+= result
+                # Seperate sentence
                 word_list = self.text_add.split(" ")
                 if len(word_list)>0:
                     res = np.array_split(pitch[0],len(word_list))
@@ -745,6 +753,7 @@ class App(ShowBase):
                     for count_index, word in enumerate(word_list):
                         if len(word)>0:
                             pitch_word = pitch_res[count_index]
+                            # Call the function to place word into the screen space
                             self.inputWord(word,res_parts[count_index][1],pitch_word )
                 self.get_result = True
             except sr.RequestError as e:
@@ -755,7 +764,7 @@ class App(ShowBase):
 
             time.sleep(1)
 
-
+    # This function merge two sentences together by comparing similar phrases
     def check(self,s1, s2):
         length1 = len(s1)
         length = min(length1, len(s2))
@@ -770,28 +779,24 @@ class App(ShowBase):
         res2+=result[-1:]
         return res2,s2[k:]
 
-    def clearText(self):
-        global cube
-        self.entry.enterText('')
 
-    # Define a procedure to move the camera.
+    # Define the function to clean the sentence and place each sentence in the screen space.
     def getInputTask(self, task):
         if self.get_result:
             self.get_result = False
-
-            #print("Previous Sentence: ", self.last_sentence_with_punctuation_old)
-            self.sentence_with_punctuation_new = self.s.replace(',','').replace('?','.').replace('!','.').split(".")
-
+            # Seperate sentence
+            self.sentence_with_punctuation_new = sent_tokenize(self.s)
+            
+	    # Clean the result
             if " " in self.sentence_with_punctuation_new:
                 self.sentence_with_punctuation_new.remove(" ")
             if "" in self.sentence_with_punctuation_new:
                 self.sentence_with_punctuation_new.remove("")
 
-
+	    # If the last sentence is different from the last round, process the last sentence
             if len(self.sentence_with_punctuation_new)>1:
                 self.last_sentence_with_punctuation_new = self.sentence_with_punctuation_new[-2]
                 start_index = 0
-                #print("Sentence Here: ", self.last_sentence_with_punctuation_new)
                 if self.last_sentence_with_punctuation_new!= self.last_sentence_with_punctuation_old:
                     index = 0
                     if len(self.sentence_with_punctuation_new)>2:
@@ -819,10 +824,11 @@ class App(ShowBase):
                     #self.word_list_for_this_sentence = []
                     if len(self.last_sentence_with_punctuation)>0:
                         word_list = nltk.word_tokenize(self.last_sentence_with_punctuation)
+                        # Call the function to process the whole sentence if the sentence is longer that 1
                         if len(word_list)>1:
                             self.inputSentence.setText("Input Sentence: "+self.last_sentence_with_punctuation)
                             self.process_sentence(self.last_sentence_with_punctuation, self.this_sentence_word_structure,start_index)
-
+			     # generate dialoage (chatbox)
                             answer = generate_conversation(self.last_sentence_with_punctuation,chatbot)
                             word_list = nltk.word_tokenize(answer)
                             if len(word_list)>1:
@@ -833,12 +839,13 @@ class App(ShowBase):
 
         return Task.cont
 
-
+    # Process the whole sentence
     def process_sentence(self, sentence, structure_dict,start_index):
         self.move_camera = False
         self.compute = 0
         self.input_sentence_number+=1
         mySequence_move = Parallel()
+        # Clean the sentence
         sentence = pre_process_sentence(sentence)
         #answer = generate_conversation(sentence,chatbot)
 
@@ -1119,9 +1126,10 @@ class App(ShowBase):
         '''
 
 
-
+    # Process each word
     def inputWord(self, word, pos,pitch_word):
-
+        
+        # Initialize the node path to store the frame
         self.node_for_this_word = self.node_for_word.attachNewNode("node_for_word_"+word+"_"+str(self.word_index))
         self.node_for_this_word_frame = self.node_for_word_frame.attachNewNode("node_for_word_frame_"+word+"_"+str(self.word_index))
         #print("Word+Index: ",word, self.word_index)
@@ -1131,6 +1139,8 @@ class App(ShowBase):
         self.word_length_information[word+"_"+str(self.word_index)] = 0
         if len(word)==0:
             pass
+            
+        # calculate the sy
         syllables = compute_syllables(word,d)
 
         # compute the 3D word vector
