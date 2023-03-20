@@ -65,6 +65,7 @@ from scipy.io.wavfile import read, write
 from utils_geom import *
 from utils_nlp import *
 from utils_visual import *
+from pydub import AudioSegment
 
 # Create a folder
 if not os.path.exists('./texture'):
@@ -136,10 +137,13 @@ LANGUAGE="English"
 # pre-set the language to avoid autodetection
 BLOCKSIZE=24678
 # this is the base chunk size the audio is split into in samples. blocksize / 16000 = chunk length in seconds.
-SILENCE_THRESHOLD=300
+SILENCE_THRESHOLD=0
 # should be set to the lowest sample amplitude that the speech in the audio material has
-SILENCE_RATIO=0.2
+SILENCE_RATIO=0
 # number of samples in one buffer that are allowed to be higher than threshold
+
+import sounddevice as sd
+from scipy.io.wavfile import write
 
 
 global_ndarray = None
@@ -176,7 +180,7 @@ class App(ShowBase):
         self.taskMgr.add(self.change_light_temperature,"Change Light Temperature")
         self.taskMgr.add(self.recordingTask,"Listen Mic Task")
         self.taskMgr.add(self.getInputTask,"getInputTask")
-
+        #self.taskMgr.add(self.save_screen,"saveframe")
 
 	# Initialize Instruction
         self.instructionText = self.makeStatusLabel("ESC: quit",6,1.5)
@@ -227,6 +231,7 @@ class App(ShowBase):
         self.accept("s", self.camera_z_control_add)
         self.accept("i", self.hide_instruction)
         self.accept("t", self.hide_texture)
+        self.accept("1",self.save_screen)
         #self.accept("n", self.hide_node)
 
 
@@ -427,9 +432,23 @@ class App(ShowBase):
         self.camera_x_pre = 0
         self.camera_y_pre = 0
         self.camera_z_pre = 0
-        
-        
-        
+        self.save_count = 0
+        self.save_count2 = -1
+
+
+        self.instructionText.hide()
+        self.instructionText1.hide()
+        self.instructionText2.hide()
+        self.instructionText3.hide()
+        self.instructionText4.hide()
+        self.instructionText5.hide()
+        self.instructionText6.hide()
+        self.instructionText7.hide()
+        self.instructionText8.hide()
+        self.sayHint.hide()
+        self.inputSentence.hide()
+        self.generateAnswer.hide()
+
     def makeFBO(self, name):
         # This routine creates an offscreen buffer.  All the complicated
         # parameters are basically demanding capabilities from the offscreen
@@ -446,6 +465,16 @@ class App(ShowBase):
             self.win.getGsg(), self.win)
 
     # Keyboard control
+    def save_screen(self, task):
+        if (int(task.time)!=self.save_count)&(int(task.time)%28==0):
+            print("the image is saved")
+
+            self.save_count = int(task.time)
+            self.save_count2 = int(self.save_count%28)
+            self.screenshot(str(self.save_count)+".jpg",defaultFilename = None)
+
+        return Task.cont
+
     def camera_control(self):
         if self.keyboard:
             # 0 and 1 are different camera modes: automatioc movement or mouse control
@@ -522,11 +551,11 @@ class App(ShowBase):
         if (time.time()-self.camera_time)>2000:
             X = self.camera_x+(self.camera_x-self.camera_x_pre)*self.compute/self.changeRate
             Y = self.y_origin_pre+(self.y_origin-self.y_origin_pre)*self.compute/self.changeRate
-            Z = self.z_origin  
+            Z = self.z_origin
                         if self.compute<self.changeRate/2:
                 self.compute += 2
             elif self.compute<self.changeRate:
-                self.compute += 1   
+                self.compute += 1
         if (time.time()-self.camera_time)>2000:
             self.camera.setPos(self.camera_x, self.camera_y-self.camera_distance, self.camera_z)
             self.camera.setHpr(0,0,0)
@@ -540,7 +569,6 @@ class App(ShowBase):
             Y = self.camera_y_pre+(self.camera_y-self.camera_y_pre)*self.compute/self.changeRate
             Z = self.camera_z#+(self.camera_z-self.camera_z_pre)*self.compute/self.changeRate
             #if self.compute==self.changeRate:
-               #print("camera Position: ",X,Y,Z)
             self.distortionObject.setPos(X,Y,Z)
             if self.camera_mode == 0:
                 # Choice 1: Fully automated camera (moving the image center and rotate)
@@ -565,10 +593,10 @@ class App(ShowBase):
                 self.compute += 1
             elif self.compute>=self.changeRate:
                 self.compute = self.changeRate
-               
+
             else:
                 R = self.camera.getR()
-        
+
         return Task.cont
     # Define a procedure to change the lighting (related to the overall sentiment)
     def change_light_temperature(self, Task):
@@ -595,68 +623,46 @@ class App(ShowBase):
         return Task.done
 
     def inputstream_generator(self):
-        global global_ndarray
-        def callback(indata,frames, time, status):
-            recordings.put(indata)
-            Volume = np.average((abs(indata.flatten())))
-            size = max(2,int(Volume-SILENCE_THRESHOLD)/40-70)
-            print("Volume",Volume,size)
-            myInterval1 = self.distortionObject.scaleInterval(BLOCKSIZE/16000, size)
-            myInterval1.start()
-        chunk=1024
-        frames = []
-        with sd.InputStream(samplerate=16000, channels=1, dtype='int16', blocksize=BLOCKSIZE, callback=callback):
-            while True:
-                frames = recordings.get()
-                indata_flattened = abs(frames.flatten())
-                
-                if((np.asarray(np.where(indata_flattened > SILENCE_THRESHOLD)).size > SILENCE_RATIO*BLOCKSIZE)):
-                    frame1 = copy.deepcopy(frames)
-                    new_detected = True
-                    if (global_ndarray is not None):
-                        global_ndarray1 = np.concatenate((global_ndarray, frame1), dtype='int16')
-                        global_ndarray = copy.deepcopy(global_ndarray1)
-                    else:
-                        global_ndarray = frame1
-                        # concatenate buffers if the end of the current buffer is not silent
-                    if (np.average((indata_flattened[-100:-1])) > SILENCE_THRESHOLD/2):
-                        continue
-                    else:
-                        local_ndarray = global_ndarray.copy()
-                        global_ndarray = None
-                        indata_transformed = local_ndarray.flatten().astype(np.float32) / 32768.0
-                        result = whisper_model.transcribe(indata_transformed, language=LANGUAGE,fp16 = False)
-                        self.s= []
-                        sentence_list = sent_tokenize(result["text"])
-                        for sentence in sentence_list:
-                            r = pre_process_sentence(sentence)
-                            if r.endswith((".","?","!")):
-                                r = r[:-1]
+        while True:
+            freq = 44100
+            duration = 20
+            recording = sd.rec(int(duration * freq),  samplerate=freq, channels=2)
+            sd.wait()
+            write("recording1.wav", freq, recording)
 
-                            word_list = nltk.word_tokenize(r)
-                            if len(word_list)>1:
-                                self.s.append(' '.join(word_list))
-                        try:
-                            a = max(self.s, key = len)
-                            self.s = []
-                            word_list = nltk.word_tokenize(a)
-                            res_parts = compute_sent_parts(word_list)
-                            count_index = 0
-                            
-                            if len(word_list)>1:
-                                self.s.append(' '.join(word_list))
-                                
-                                for word in word_list:
-                                    print(word)
-                                    self.inputWord(word,res_parts[count_index][1],1,count_index )
-                                    count_index+=1
-                            self.get_result = True
-                        except:
-                            continue
+            sound = AudioSegment.from_wav('recording1.wav')
+            sound.export('myfile.mp3', format='mp3')
 
-                    del local_ndarray
-                    del indata_flattened
-                    time.sleep(1)
+            result = whisper_model.transcribe("myfile.mp3")
+            self.s= []
+            sentence_list = sent_tokenize(result["text"])
+            for sentence in sentence_list:
+                r = pre_process_sentence(sentence)
+                if r.endswith((".","?","!")):
+                    r = r[:-1]
+
+                word_list = nltk.word_tokenize(r)
+                if len(word_list)>1:
+                    self.s.append(' '.join(word_list))
+            try:
+                a = max(self.s, key = len)
+                self.s = []
+                word_list = nltk.word_tokenize(a)
+                res_parts = compute_sent_parts(word_list)
+                count_index = 0
+
+                if len(word_list)>1:
+                    self.s.append(' '.join(word_list))
+
+                    for word in word_list:
+                        self.inputWord(word,res_parts[count_index][1],1,count_index )
+                        count_index+=1
+                self.get_result = True
+            except:
+                continue
+
+
+        time.sleep(1)
 
 
     # Define the function to clean the sentence and place each sentence in the screen space.
@@ -666,7 +672,7 @@ class App(ShowBase):
             if len(self.s)>0:
                 for sentence in self.s:
                     sentence = pre_process_sentence(sentence)
-                
+
                     self.this_sentence_word_structure = {}
                     word_list = nltk.word_tokenize(sentence)
                     if(len(word_list)>1):
@@ -679,29 +685,24 @@ class App(ShowBase):
                         self.inputSentence.setText("Input Sentence: "+sentence)
                         self.process_sentence(sentence, self.this_sentence_word_structure,self.start_index)
             self.real_sentence = self.s[0]
+            self.screenshot(str(self.save_count)+".jpg",defaultFilename = None)
+            self.save_count+=1
+
+            '''
             self.get_answer = True
             answer = cliza_chat(self.real_sentence)
             word_list = nltk.word_tokenize(answer)
             if len(word_list)>1:
                 self.generateAnswer.setText("Generated Answer: "+answer)
                 self.process_answer(answer)
+            '''
 
 
         return Task.cont
-        
-    # Define the function to clean the sentence and place each sentence in the screen space.
-    def getAnswerTask(self, task):
-        if self.get_answer:
-            self.get_answer = False
-            answer = cliza_chat(self.s[0])
-            word_list = nltk.word_tokenize(answer)
-            if len(word_list)>1:
-                self.generateAnswer.setText("Generated Answer: "+answer)
-                self.process_answer(answer)
-        return Task.cont
+
     # Process the whole sentence
     def process_sentence(self, sentence, structure_dict,start_index):
-        
+
         self.compute = 0
         print("Move For Sentence")
         self.input_sentence_number+=1
@@ -739,17 +740,17 @@ class App(ShowBase):
         self.z_origin = z_origin
 
         self.camera_x_pre = self.camera_x
-        self.camera_y_pre = self.camera_y 
+        self.camera_y_pre = self.camera_y
         self.camera_z_pre = self.camera_z
-                
-        self.camera_x = self.x_origin 
-        self.camera_y = self.x_origin 
-        self.camera_z = self.x_origin 
-        
+
+        self.camera_x = self.x_origin
+        self.camera_y = self.x_origin
+        self.camera_z = self.x_origin
+
 
         # compute parts of the speech of the given sentence
         res_parts = compute_sent_parts(word_list)
-       
+
         word_parts, res_key = get_cfg_structure(word_list)
         if len(word_parts)==0:
             word_parts = word_list
@@ -819,7 +820,7 @@ class App(ShowBase):
                     y_old_1 = y1
                     z_old_1 = z1
                 name_list.append("node_for_word_"+word+"_"+str(word_index))
-               
+
                 name_list_frame.append("node_for_word_frame_"+word+"_"+str(word_index))
                 # use the word-level to determine the framework's height
                 distance = 4*max(res_key.get(word, [0.5]))*self.zoom_rate
@@ -856,10 +857,6 @@ class App(ShowBase):
                 count+=1
 
 
-
-
-            print(self.node_for_word.getChildren())
-            print(name_list)
             for node in self.node_for_word.getChildren():
                 if node.getName() in name_list:
                     node.reparentTo(self.node_for_sub_sentence)
@@ -878,41 +875,12 @@ class App(ShowBase):
                     #myInterval_frame = node.posInterval(5, Point3(pos_new[0],pos_new[1],pos_new[2]))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
                     #mySequence_move.append(myInterval_frame)
 
+            self.node_for_sub_sentence.setPos(x_sub_origin, y_sub_origin,z_sub_origin)
+            self.node_for_sub_sentence_frame.setPos(x_sub_origin, y_sub_origin,z_sub_origin)
 
 
-            #mySequence_move.start()
-
-            #self.node_for_sub_sentence.setPos(x_sub_origin, y_sub_origin,z_sub_origin)
-            myInterval1 = self.node_for_sub_sentence.posInterval(len(sub_word_list), Point3(x_sub_origin, y_sub_origin,z_sub_origin))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
-            #self.node_for_sub_sentence_frame.setPos(x_sub_origin, y_sub_origin,z_sub_origin)
-
-            myInterval2 = self.node_for_sub_sentence_frame.posInterval(len(sub_word_list), Point3(x_sub_origin, y_sub_origin,z_sub_origin)) #Point3(x_sub_origin, y_sub_origin,z_sub_origin))
-            myParallel = Parallel(myInterval1, myInterval2)
-
-            myParallel.start()
-
-        myInterval_all_1 = self.node_for_sentence.posInterval(self.sentence_length, Point3(x_origin, y_origin,z_origin))#Point3(x_sub_origin, y_sub_origin,z_sub_origin))
-        self.node_for_sub_sentence_frame.setPos(x_sub_origin, y_sub_origin,z_sub_origin)
-
-        myInterval_all_2 = self.node_for_sentence_frame.posInterval(self.sentence_length, Point3(x_origin, y_origin,z_origin)) #Point3(x_sub_origin, y_sub_origin,z_sub_origin))
-        myParallel_all = Parallel(myInterval_all_1 , myInterval_all_2)
-
-        myParallel_all.start()
-
-
-        #self.sphere.setPos(x_origin,y_origin,z_origin)
-        #self.node_for_sentence.setPos(x_origin, y_origin,z_origin)
-        #self.node_for_sentence_frame.setPos(x_origin, y_origin,z_origin)
-
-
-        '''
-        word_list = nltk.word_tokenize(answer)
-        if len(word_list)>1:
-            self.generateAnswer.setText("Generated Answer: "+answer)
-            self.process_answer(answer)
-        '''
-
-
+        self.node_for_sentence.setPos(x_origin, y_origin,z_origin)
+        self.node_for_sentence_frame.setPos(x_origin, y_origin,z_origin)
 
 
         #self.move_camera = True
@@ -935,77 +903,10 @@ class App(ShowBase):
         while len(self.node_for_render_sentence.getChildren())>8:
             self.node_for_render_sentence.getChild(0).removeNode()
             self.node_for_render_sentence_frame.getChild(0).removeNode()
-        '''
-        self.co_reference = compute_co_reference(self.input_sentence)
-
-        self.co_reference_node.removeNode()
-        self.co_reference_node = self.node_for_render.attachNewNode("co_reference_node")
-        self.co_reference_frame = []
-
-
-        for i in self.co_reference:
-            if len(i)>1:
-                index = i[0][0]-1
-                word_connect = self.input_sentence_word_list.get(index)
-                print(index,word_connect)
-                #print("Searching: ",word_connect[0],"_",str(index) )
-                try:
-                    sentence_position_now = self.store_position.get(word_connect+"_"+str(index))['sentence_position']
-                    word_position_now = self.store_position.get(word_connect+"_"+str(index))['word_position']
-                    sub_sentence_position_now = self.store_position.get(word_connect+"_"+str(index))['sub_sentence_position_now']
-                    start_position_now = sentence_position_now+word_position_now+sub_sentence_position_now
-                except:
-                    print("does not find a good result in line 943")
-                    continue
-
-
-                index_pre = word_connect+str(index)
-
-                for j in i[1:]:
-                    index = j[0]-1
-                    word_connect =self.input_sentence_word_list.get(index)
-                    print("FIND PAIR: ",index, word_connect)
-                    sentence_position_pre = copy.deepcopy(sentence_position_now)
-                    try:
-                        sentence_position_now = self.store_position.get(word_connect+"_"+str(index))['sentence_position']
-                        sentence_index = self.store_position.get(word_connect+"_"+str(index))['sentence_index']
-                    except:
-                        print("does not find a good result")
-                        continue
-
-                    if [index_pre,word_connect+str(index)] in self.rendered_connection:
-
-                        position_edit = copy.deepcopy(sentence_position_now)
-
-                    else:
-                        position_edit = [(sentence_position_pre[0] + sentence_position_now[0])/2, (sentence_position_pre[1] + sentence_position_now[1])/2, (sentence_position_pre[2] + sentence_position_now[2])/2]
-                        self.rendered_connection.append([index_pre,word_connect+str(index)])
-                        test = 0
-                        for i in self.node_for_render_sentence.getChildren():
-                            test+=1
-                            if i.getName() == "node_for_sentence_"+str(sentence_index):
-
-                                self.store_position.get(word_connect+str(index))['sentence_position'] =(position_edit[0],position_edit[1],position_edit[2])
-                                myInterval_corr= i.posInterval(5, Point3(position_edit[0],position_edit[1],position_edit[2])) #Point3(x_sub_origin, y_sub_origin,z_sub_origin))
-                                myInterval_corr.start()
-                                print("find sentence: ",i.getName() )
-                                break
-                    frame12 = self.loader.loadModel("models/box")
-                    frame12.setPosHprScale(LVecBase3(start_position_now[0],start_position_now[1], start_position_now[2]),
-                                           LVecBase3(atan2(position_edit[1]-start_position_now[1], position_edit[0]-start_position_now[0])* 180.0/np.pi, 0,-atan2(position_edit[2]-start_position_now[2], sqrt((position_edit[0]-start_position_now[0])**2+(position_edit[1]-start_position_now[1])**2))* 180.0/np.pi),
-                                           LVecBase3(sqrt((position_edit[0]-start_position_now[0])**2+(position_edit[1]-start_position_now[1])**2+(position_edit[2]-start_position_now[2])**2), 0.1, 0.1))
-                    frame12.setTextureOff(1)
-                    frame12.setTransparency(1)
-                    frame12.setColorScale(0, 0.1, 0.2,0.9)
-                    frame12.reparentTo(self.co_reference_node)
-
-        '''
-
 
     # Process each word
     def inputWord(self, word, pos,pitch_word,count_index):
-    
-        
+
         # Initialize the node path to store the frame
         self.node_for_this_word = self.node_for_word.attachNewNode("node_for_word_"+word+"_"+str(self.word_index))
         self.node_for_this_word_frame = self.node_for_word_frame.attachNewNode("node_for_word_frame_"+word+"_"+str(self.word_index))
@@ -1037,7 +938,6 @@ class App(ShowBase):
             self.y_old_1 = 0
             self.z_old_1 = 0
             self.compute = 0
-            print("Move For Word")
             self.camera_x_pre = self.camera_x
             self.camera_y_pre = self.camera_y
             self.camera_z_pre = self.camera_z
@@ -1051,7 +951,7 @@ class App(ShowBase):
         y1 = self.y_old_1
         self.z_old_1 = 10*random.random()-5
         z1 = self.z_old_1
-        
+
         # compute the front surface of the framework
         # compute the second point of the framework
         [x2, y2, z2] = solve_point_on_vector(x1, y1, z1, w, nx, ny, nz)
@@ -1278,7 +1178,7 @@ class App(ShowBase):
             node_f.setTwoSided(True)
             node_f.setAttrib(DepthOffsetAttrib.make(0))
             node_f.setTexture(testTexture)
-            node_f.setMaterial(self.myMaterialSurface)
+            #node_f.setMaterial(self.myMaterialSurface)
 
             self.node_dict[self.word_index].append(node_f)
             # compute the back surface of the framework
@@ -1295,7 +1195,7 @@ class App(ShowBase):
             node_b.setTwoSided(True)
             node_b.setAttrib(DepthOffsetAttrib.make(0))
             node_b.setTexture(testTexture)
-            node_b.setMaterial(self.myMaterialSurface)
+            #node_b.setMaterial(self.myMaterialSurface)
             self.node_dict[self.word_index].append(node_b)
 
         # if the word is a verb, draw the horizontal surfaces of the frame
@@ -1320,7 +1220,7 @@ class App(ShowBase):
             node_bottom.setTwoSided(True)
             node_bottom.setAttrib(DepthOffsetAttrib.make(0))
             node_bottom.setTexture(testTexture)
-            node_bottom.setMaterial(self.myMaterialSurface)
+            #node_bottom.setMaterial(self.myMaterialSurface)
             self.node_dict[self.word_index].append(node_bottom)
 
             # draw the top surface of the framework
@@ -1336,7 +1236,7 @@ class App(ShowBase):
             node_up.setTwoSided(True)
             node_up.setAttrib(DepthOffsetAttrib.make(0))
             node_up.setTexture(testTexture)
-            node_up.setMaterial(self.myMaterialSurface)
+            #node_up.setMaterial(self.myMaterialSurface)
             self.node_dict[self.word_index].append(node_up)
 
         # store the 8 points of the framework
@@ -1405,7 +1305,7 @@ class App(ShowBase):
         #node_in.setTwoSided(True)
         node_in.setAttrib(DepthOffsetAttrib.make(1))
 
-        node_in.setMaterial(self.myMaterialIn)
+        #node_in.setMaterial(self.myMaterialIn)
         self.node_dict[self.word_index].append(node_in)
         self.word_position[word+"_"+str(self.word_index)] = (x1,y1,z1)
         #print("LIne 1353: ",word,"_",self.word_index)
@@ -1416,7 +1316,7 @@ class App(ShowBase):
             node.setPos(x1-x_origin,y1-y_origin,z1-z_origin)
 
         for node in self.node_dict_frame[self.word_index]:
-            node.setMaterial(self.myMaterial_frame)
+            #node.setMaterial(self.myMaterial_frame)
             node.reparentTo(self.node_for_this_word_frame)
             #node.setPos(x1,y1,z1)
         #self.word_list_for_this_sentence.append(self.node_for_this_word)
@@ -1541,7 +1441,7 @@ class App(ShowBase):
                 node_f.setColorScale(1,1,1,howOpaque)
                 node_f.setTwoSided(True)
                 node_f.setAttrib(DepthOffsetAttrib.make(0))
-                node_f.setMaterial(self.myMaterialAnswerSurface)
+                #node_f.setMaterial(self.myMaterialAnswerSurface)
                 node_dict[count].append(node_f)
 
                 # compute the back surface of the framework
@@ -1555,7 +1455,7 @@ class App(ShowBase):
                 node_b.setColorScale(1,1,1,howOpaque)
                 node_b.setTwoSided(True)
                 node_b.setAttrib(DepthOffsetAttrib.make(0))
-                node_b.setMaterial(self.myMaterialAnswerSurface)
+                #node_b.setMaterial(self.myMaterialAnswerSurface)
                 node_dict[count].append(node_b)
 
                 square_bottom = makeQuad(x1, y1, z1, x2, y2, z2, x_move1, y_move1, z1, x_move2, y_move2, z2, test_color,[x_origin,y_origin,z_origin],1)
@@ -1567,7 +1467,7 @@ class App(ShowBase):
                 node_bottom.setColorScale(1,1,1,howOpaque)
                 node_bottom.setTwoSided(True)
                 node_bottom.setAttrib(DepthOffsetAttrib.make(0))
-                node_bottom.setMaterial(self.myMaterialAnswerSurface)
+                #node_bottom.setMaterial(self.myMaterialAnswerSurface)
                 node_dict[count].append(node_bottom)
 
                 # draw the top surface of the framework
@@ -1580,7 +1480,7 @@ class App(ShowBase):
                 node_up.setColorScale(1,1,1,howOpaque)
                 node_up.setTwoSided(True)
                 node_up.setAttrib(DepthOffsetAttrib.make(0))
-                node_up.setMaterial(self.myMaterialAnswerSurface)
+                #node_up.setMaterial(self.myMaterialAnswerSurface)
                 node_dict[count].append(node_up)
 
                 # store the 8 points of the framework
@@ -1647,7 +1547,7 @@ class App(ShowBase):
                 howOpaque=0.5+abs(color_value[2])*0.5
                 node_in.setColorScale(1,1,1,howOpaque)
                 node_in.setAttrib(DepthOffsetAttrib.make(1))
-                node_in.setMaterial(self.myMaterialAnswerIn)
+                #node_in.setMaterial(self.myMaterialAnswerIn)
                 node_dict[count].append(node_in)
 
 
